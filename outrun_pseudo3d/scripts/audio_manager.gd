@@ -163,6 +163,7 @@ func _enable_loop(stream: AudioStream) -> void:
 		var wav := stream as AudioStreamWAV
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		wav.loop_begin = 0
+		@warning_ignore("integer_division")  # frame count: exact by construction
 		wav.loop_end = wav.data.size() / _wav_frame_bytes(wav)
 
 

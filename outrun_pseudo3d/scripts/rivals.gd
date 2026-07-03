@@ -27,12 +27,12 @@ const NAMES: Array[String] = [
 const GRID_GAP := 500.0           # world units between grid slots at the start
 const CRUISE_MIN := 0.80          # slowest rival cruise, fraction of MAX_SPEED
 const CRUISE_MAX := 0.96          # fastest rival cruise
-const START_SPEED_FACTOR := 0.5   # rolling start: pack begins at half cruise
 const CURVE_SLOWDOWN := 0.045     # cruise loss per unit of curve severity
 const CURVE_SLOWDOWN_CAP := 0.32
 const APEX_BIAS := 0.08           # how far rivals cut toward a curve's inside
 const LATERAL_SPEED := 1.0        # lane-keeping drift, road-halves per second
-const DODGE_GAIN := 1.4           # rivals dodge harder than ambient traffic
+const DODGE_COMMIT := 0.5         # seconds a rival commits to a dodge direction
+const DODGE_RATE := 1.3           # committed dodge drift, road-halves/s at full speed
 const ACCEL := PlayerCar.MAX_SPEED / 4.0
 const RUBBER_RANGE := 15000.0     # gap beyond which rubber-banding kicks in
 const RUBBER_AHEAD := 0.93        # leaders ease off
@@ -44,6 +44,7 @@ const FLASH_RANGE := 2500.0       # overtakes flash only when they happen nearby
 
 var rivals: Array = []
 var events: Array[String] = []    # overtake messages, consumed by main each frame
+var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 
 
 # === LIFECYCLE ===
@@ -52,6 +53,10 @@ var events: Array[String] = []    # overtake messages, consumed by main each fra
 ## and races through the pack, Road Rash style.
 func spawn(main: Node2D, count: int) -> void:
 	rivals.clear()
+	leader_cp_times.clear()
+	var cp_count: int = main.cp_zs.size()
+	for k in range(cp_count):
+		leader_cp_times.append(-1.0)
 	var n := clampi(count, 1, NAMES.size())
 	for i in range(n):
 		var t := float(i) / float(maxi(1, n - 1))
@@ -62,9 +67,13 @@ func spawn(main: Node2D, count: int) -> void:
 			"z": GRID_GAP * float(i + 1),
 			"offset": -0.45 if i % 2 == 0 else 0.45,
 			"lane": randf_range(0.25, 0.55) * (-1.0 if i % 2 == 0 else 1.0),
-			"speed": base * START_SPEED_FACTOR,
+			"speed": 0.0,          # standing start behind the countdown
 			"base_speed": base,
 			"bonk_t": 0.0,
+			"dodge_dir": 0.0,      # committed dodge direction (hysteresis)
+			"dodge_t": 0.0,        # time remaining on the commitment
+			"next_cp": 0,          # index of the next checkpoint to cross
+			"finish_time": -1.0,   # race clock at the finish line, -1 = racing
 			"was_ahead": true,
 			"finished": false,
 		}
@@ -106,10 +115,21 @@ func update(dt: float, main: Node2D) -> void:
 
 		r.speed = move_toward(float(r.speed), target, ACCEL * dt)
 
-		# --- Steering: dodge obstacles, otherwise run the racing line. ---
+		# --- Steering: dodge obstacles, otherwise run the racing line.
+		# Dodges are COMMITTED: the first dodge signal latches a direction
+		# for DODGE_COMMIT seconds, refreshed by same-direction signals and
+		# deaf to opposite ones. Without this, per-frame dodge impulses
+		# alternate with lane-keeping pulling back toward the obstacle and
+		# the rival vibrates instead of swerving. ---
 		var dodge: float = main._car_steer(r, old_seg, player_seg, player_w)
-		if absf(dodge) > 0.0001:
-			r.offset = float(r.offset) + dodge * dt * 60.0 * DODGE_GAIN
+		if absf(dodge) > 0.0001 \
+				and (float(r.dodge_t) <= 0.0 or signf(dodge) == float(r.dodge_dir)):
+			r.dodge_dir = signf(dodge)
+			r.dodge_t = DODGE_COMMIT
+		if float(r.dodge_t) > 0.0:
+			r.dodge_t = float(r.dodge_t) - dt
+			r.offset = float(r.offset) + float(r.dodge_dir) * DODGE_RATE * dt \
+					* (float(r.speed) / PlayerCar.MAX_SPEED)
 		else:
 			var apex: float = clampf(
 					float(r.lane) - float(old_seg.curve) * APEX_BIAS, -0.85, 0.85)
@@ -143,8 +163,16 @@ func update(dt: float, main: Node2D) -> void:
 					r.bonk_t = BONK_COOLDOWN
 					break
 
+		# --- Checkpoint and finish times (race clock read from main). ---
+		var cp_zs: Array[float] = main.cp_zs
+		while int(r.next_cp) < cp_zs.size() and float(r.z) >= cp_zs[int(r.next_cp)]:
+			var k: int = int(r.next_cp)
+			if leader_cp_times[k] < 0.0 or float(main.race_time) < leader_cp_times[k]:
+				leader_cp_times[k] = float(main.race_time)
+			r.next_cp = k + 1
 		if not bool(r.finished) and float(r.z) >= track_len:
 			r.finished = true
+			r.finish_time = float(main.race_time)
 
 		# --- Overtake events (only when it happens in your mirrors). ---
 		var ahead := float(r.z) > player.position_z
@@ -174,3 +202,22 @@ static func _overlap(x1: float, w1: float, x2: float, w2: float,
 		percent: float = 1.0) -> bool:
 	var half := percent * 0.5
 	return not (x1 + w1 * half < x2 - w2 * half or x1 - w1 * half > x2 + w2 * half)
+
+
+## Final results at the moment the player crosses the line: finished rivals
+## use their recorded times; still-racing rivals get a projected finish
+## (remaining distance at a stabilized speed — arcade-honest, and it keeps
+## the board consistent with track positions). Sorted by time; the caller
+## finds the player row for rank and highlighting.
+func board_entries(player_time: float, track_len: float) -> Array:
+	var entries: Array = [
+		{"name": "YOU", "time": player_time, "is_player": true},
+	]
+	for r in rivals:
+		var t: float = float(r.finish_time)
+		if t < 0.0:
+			var proj_speed: float = maxf(float(r.speed), float(r.base_speed) * 0.8)
+			t = player_time + (track_len - float(r.z)) / proj_speed
+		entries.append({"name": r.name, "time": t, "is_player": false})
+	entries.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	return entries

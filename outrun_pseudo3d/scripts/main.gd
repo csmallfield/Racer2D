@@ -3,10 +3,9 @@ extends Node2D
 ## (player update, traffic, collisions, timer, stage progression).
 
 const LEVELS_DIR := "res://scripts/levels"
-const STAGE_CLEAR_DELAY := 3.0
 const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
 
-enum State { RUNNING, STAGE_CLEAR, GAME_OVER }
+enum State { COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER }
 
 var level_paths: Array = []
 var level_index := 0
@@ -21,7 +20,12 @@ var hud: HudLayer
 
 var state: State = State.RUNNING
 var time_left := 0.0
-var state_timer := 0.0
+var countdown_t := 0.0          # 3..0 pre-race countdown
+var _last_count := -1           # last whole second announced in the countdown
+var race_time := 0.0            # overall race clock, counts up while RUNNING
+var section_time := 0.0         # timer grant per checkpoint section
+var cp_zs: Array[float] = []    # checkpoint z positions on the track
+var player_next_cp := 0         # index of the player's next checkpoint
 var _last_beep_second := -1     # last whole second a time_warning beep fired
 
 
@@ -67,18 +71,50 @@ func _load_level(idx: int) -> void:
 	level.build(track)
 	track.finalize()
 
+	cp_zs = track.mark_checkpoints(level.checkpoint_count)
+	section_time = level.time_limit / float(level.checkpoint_count + 1)
+	player_next_cp = 0
+	race_time = 0.0
+
 	player = PlayerCar.new()
 	_spawn_traffic()
 	rivals = RivalManager.new()
 	rivals.spawn(self, level.rival_count)
 
-	time_left = level.time_limit
-	state = State.RUNNING
+	time_left = section_time
+	state = State.COUNTDOWN
+	countdown_t = 3.0
+	_last_count = -1
 	_last_beep_second = -1
 	hud.set_stage(level.level_name)
 	hud.set_message("")
+	hud.hide_leaderboard()
+	hud.set_race_time(0.0)
 	Audio.stop_engine()
 	Audio.play_music(level.music)
+
+
+## Player checkpoint crossing: extend the section timer (leftover time
+## carries over, OutRun style) and flash the delta to the fastest rival
+## through the same checkpoint.
+func _check_player_checkpoint(prev_z: float) -> void:
+	if player_next_cp >= cp_zs.size():
+		return
+	var cp_z := cp_zs[player_next_cp]
+	if prev_z < cp_z and player.position_z >= cp_z:
+		time_left += section_time
+		_last_beep_second = -1
+		Audio.play("checkpoint")
+		var leader_t: float = rivals.leader_cp_times[player_next_cp]
+		if leader_t < 0.0:
+			hud.set_flash("CHECKPOINT — LEADER!")
+		else:
+			var delta := race_time - leader_t
+			var sign_str := "+" if delta >= 0.0 else "-"
+			var ad := absf(delta)
+			hud.set_flash("CHECKPOINT  %s%02d:%02d"
+					% [sign_str, int(ad / 60.0), int(ad) % 60])
+		player_next_cp += 1
 
 
 func _spawn_traffic() -> void:
@@ -117,12 +153,13 @@ func _process(dt: float) -> void:
 		return
 
 	match state:
+		State.COUNTDOWN:
+			_countdown_frame(dt)
 		State.RUNNING:
 			_run_frame(dt)
 		State.STAGE_CLEAR:
 			_coast_frame(dt, PlayerCar.MAX_SPEED * 0.35)
-			state_timer -= dt
-			if state_timer <= 0.0:
+			if Input.is_action_just_pressed("accelerate"):
 				_load_level(level_index + 1)
 		State.GAME_OVER:
 			_coast_frame(dt, 0.0)
@@ -131,8 +168,31 @@ func _process(dt: float) -> void:
 	hud.set_time(time_left)
 
 
+## Pre-race: racers held on the grid, traffic ambling, big 3-2-1 center
+## stage. RUNNING (and the race clock) begins on GO.
+func _countdown_frame(dt: float) -> void:
+	countdown_t -= dt
+	_update_traffic(dt)
+	_scroll_background(dt)
+	Audio.update_engine(0.0, false)
+	var whole := int(ceilf(countdown_t))
+	if countdown_t <= 0.0:
+		state = State.RUNNING
+		hud.set_message("")
+		hud.set_flash("GO!")
+		Audio.play("countdown_go")
+	elif whole != _last_count:
+		_last_count = whole
+		hud.set_message(str(whole))
+		Audio.play("countdown_beep")
+
+
 func _run_frame(dt: float) -> void:
+	race_time += dt
+	hud.set_race_time(race_time)
+	var prev_z := player.position_z
 	var crossed := player.update(dt, self)
+	_check_player_checkpoint(prev_z)
 	_update_traffic(dt)
 	rivals.update(dt, self)
 	for e in rivals.events:
@@ -151,9 +211,14 @@ func _run_frame(dt: float) -> void:
 
 	if crossed:
 		state = State.STAGE_CLEAR
-		state_timer = STAGE_CLEAR_DELAY
-		var final_rank := rivals.player_rank(player.position_z)
-		hud.set_message("FINISHED %s of %d!"
+		var entries: Array = rivals.board_entries(race_time, track.track_length())
+		var final_rank := 1
+		for i in range(entries.size()):
+			if bool(entries[i].is_player):
+				final_rank = i + 1
+				break
+		hud.set_message("")
+		hud.show_leaderboard(entries, "FINISHED %s of %d"
 				% [HudLayer.ordinal(final_rank), rivals.total_racers()])
 		Audio.play("stage_clear")
 	elif time_left <= 0.0:

@@ -12,6 +12,9 @@ var message_label: Label
 var hint_label: Label
 var position_label: Label
 var flash_label: Label
+var race_time_label: Label
+var board_bg: ColorRect
+var board_label: RichTextLabel
 var _flash_t := 0.0
 
 
@@ -28,13 +31,16 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
 	flash_label = _make_label(Vector2(0, 380), Vector2(1280, 40), 26,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
+	race_time_label = _make_label(Vector2(0, 72), Vector2(1280, 30), 20,
+			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
+	_make_leaderboard()
 	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
 	hint_label.text = "Arrows/WASD or gamepad  •  R restart stage  •  N next stage"
 
 
 func _make_label(pos: Vector2, size: Vector2, font_size: int,
-		align: int, color: Color) -> Label:
+		align: HorizontalAlignment, color: Color) -> Label:
 	var l := Label.new()
 	l.position = pos
 	l.size = size
@@ -89,3 +95,54 @@ static func ordinal(n: int) -> String:
 			2: suffix = "nd"
 			3: suffix = "rd"
 	return "%d%s" % [n, suffix]
+
+
+func _make_leaderboard() -> void:
+	board_bg = ColorRect.new()
+	board_bg.position = Vector2(390, 120)
+	board_bg.size = Vector2(500, 480)
+	board_bg.color = Color(0.02, 0.02, 0.06, 0.82)
+	board_bg.visible = false
+	add_child(board_bg)
+	board_label = RichTextLabel.new()
+	board_label.position = Vector2(410, 136)
+	board_label.size = Vector2(460, 452)
+	board_label.bbcode_enabled = true
+	board_label.scroll_active = false
+	board_label.add_theme_font_size_override("normal_font_size", 24)
+	board_label.add_theme_font_size_override("bold_font_size", 24)
+	board_label.visible = false
+	add_child(board_label)
+
+
+## entries: sorted array of {name, time, is_player}; the player row is
+## highlighted. Shown until hide_leaderboard().
+func show_leaderboard(entries: Array, title: String = "RACE RESULTS") -> void:
+	var rows := "[center][b]%s[/b]\n\n[/center]" % title
+	rows += "[table=3]"
+	for i in range(entries.size()):
+		var e: Dictionary = entries[i]
+		var open_tag := "[color=#ffd24d]" if bool(e.is_player) else "[color=#e8e8e8]"
+		rows += "[cell]%s %s  [/color][/cell]" % [open_tag, ordinal(i + 1)]
+		rows += "[cell]%s %s  [/color][/cell]" % [open_tag, String(e.name)]
+		rows += "[cell]%s%s[/color][/cell]" % [open_tag, format_time(float(e.time))]
+	rows += "[/table]"
+	rows += "\n[center][color=#aaaaaa]accelerate to continue[/color][/center]"
+	board_label.text = rows
+	board_bg.visible = true
+	board_label.visible = true
+
+
+func hide_leaderboard() -> void:
+	board_bg.visible = false
+	board_label.visible = false
+
+
+func set_race_time(t: float) -> void:
+	race_time_label.text = format_time(t)
+
+
+static func format_time(t: float) -> String:
+	var m := int(t / 60.0)
+	var sec := fmod(t, 60.0)
+	return "%d:%04.1f" % [m, sec]

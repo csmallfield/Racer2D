@@ -149,6 +149,22 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Race structure
+
+Races start with a 3…2…1…GO countdown — everyone gridded and held, you
+last. The overall race clock (counting up, top center) starts on GO.
+
+Checkpoint stripes divide each stage into equal sections (`checkpoint_count`
+per level, default 2); the countdown timer is per-section, and crossing a
+checkpoint adds the section allotment on top of whatever you had left,
+OutRun style. Each crossing also flashes your time delta against the
+fastest rival through that checkpoint ("+00:03" behind, "-00:02" ahead —
+or "LEADER!" if nobody has beaten you to it).
+
+Finishing brings up the results board: every racer's position, name, and
+time (rivals still on course get an honest arcade projection), with your
+row highlighted. Press accelerate to continue to the next stage.
+
 ## Traffic AI
 
 NPC cars scan up to 20 segments ahead and swerve around slower cars and the

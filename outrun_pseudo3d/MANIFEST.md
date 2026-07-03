@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v6
+# Delivery Manifest — outrun_pseudo3d v8
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -22,6 +22,8 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v6 removes the fork system entirely and adds Road Rash-style AI opponents: a 9-rival named roster with personality speeds, curve braking, apex hugging, rubber-banding, and traffic avoidance, plus live position ranking in the HUD ("3rd / 10"), nearby-overtake flashes, and finish position on stage clear.
+v7 fixes the finish-rank bug (rank now derives from finish times, not wrapped progress) and rival dodge jitter (committed dodges with hysteresis), and adds: 3-2-1-GO countdown, checkpoint sections with timer extension and leader time deltas, an overall race clock, and an end-of-race leaderboard.
+
+Previously: v6 removes the fork system entirely and adds Road Rash-style AI opponents: a 9-rival named roster with personality speeds, curve braking, apex hugging, rubber-banding, and traffic avoidance, plus live position ranking in the HUD ("3rd / 10"), nearby-overtake flashes, and finish position on stage clear.
 
 New levels: drop a .gd extending TrackLevel into scripts/levels/ — auto-discovered, played in filename order.

@@ -165,6 +165,9 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 	elif seg.special == "finish":
 		road = th.finish
 		rumble = th.finish
+	elif seg.special == "checkpoint":
+		road = th.checkpoint if th.has("checkpoint") else th.start
+		rumble = th.checkpoint if th.has("checkpoint") else th.start
 	var fogc: Color = th.fog
 	grass = grass.lerp(fogc, fog)
 	road = road.lerp(fogc, fog)
