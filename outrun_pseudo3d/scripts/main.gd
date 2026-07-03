@@ -107,17 +107,21 @@ func _check_player_checkpoint(prev_z: float) -> void:
 		time_left += section_time
 		_last_beep_second = -1
 		Audio.play("checkpoint")
-		# Delta convention: + you're ahead, - you're behind.
+		# Racing-standard delta: "+" behind the leader (red), "-" ahead (green).
 		var leader_t: float = rivals.leader_cp_times[player_next_cp]
+		var green := Color(0.35, 0.95, 0.4)
+		var red := Color(0.95, 0.3, 0.25)
 		if leader_t < 0.0:
-			# Nobody has crossed yet: project the best chaser's arrival.
+			# Nobody has crossed yet: your cushion over the best chaser.
 			var eta: float = rivals.next_rival_eta(cp_z)
-			hud.set_flash("CHECKPOINT — LEADER  +%s" % HudLayer.format_time(eta))
+			hud.set_flash("CHECKPOINT  -%s  (LEADER)"
+					% HudLayer.format_time(eta), green)
 		else:
-			var delta := leader_t - race_time
+			var delta := race_time - leader_t
 			var sign_str := "+" if delta >= 0.0 else "-"
 			hud.set_flash("CHECKPOINT  %s%s"
-					% [sign_str, HudLayer.format_time(absf(delta))])
+					% [sign_str, HudLayer.format_time(absf(delta))],
+					red if delta >= 0.0 else green)
 		player_next_cp += 1
 
 
@@ -273,8 +277,10 @@ func _update_traffic(dt: float) -> void:
 ## Per-frame lateral steering for one NPC car (codeincomplete's updateCarOffset).
 ## Scans up to AI_LOOKAHEAD segments ahead; dodges the player and slower cars,
 ## steering harder the closer the obstacle. Returns offset delta per 1/60 s.
+## lookahead: how many segments ahead the car scans (rivals scan farther —
+## at racing speeds the default gives too little reaction time).
 func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
-		player_w: float) -> float:
+		player_w: float, lookahead: int = AI_LOOKAHEAD) -> float:
 	var seg_count := track.segments.size()
 	# Cars far outside the drawn window don't need AI (invisible anyway).
 	var rel: int = (int(car_seg.index) - int(player_seg.index) + seg_count) % seg_count
@@ -283,7 +289,7 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 
 	var car_w: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
 	var car_x: float = float(car.offset)
-	for i in range(1, AI_LOOKAHEAD):
+	for i in range(1, lookahead):
 		var seg: Dictionary = track.segments[(int(car_seg.index) + i) % seg_count]
 
 		# Player ahead of us, we're faster, and paths overlap: swerve.

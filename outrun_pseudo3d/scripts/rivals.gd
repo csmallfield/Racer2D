@@ -25,20 +25,21 @@ const NAMES: Array[String] = [
 	"DIABLO", "JUNKO", "AXEL", "GROG",
 ]
 const GRID_GAP := 500.0           # world units between grid slots at the start
-const CRUISE_MIN := 0.84          # slowest rival cruise, fraction of MAX_SPEED
-const CRUISE_MAX := 0.99          # fastest rival cruise
-const CURVE_SLOWDOWN := 0.038     # cruise loss per unit of curve severity
-const CURVE_SLOWDOWN_CAP := 0.28
+const CRUISE_MIN := 0.86          # slowest rival cruise, fraction of MAX_SPEED
+const CRUISE_MAX := 1.0           # fastest rival matches your top speed flat-out
+const CURVE_SLOWDOWN := 0.034     # cruise loss per unit of curve severity
+const CURVE_SLOWDOWN_CAP := 0.25
 const APEX_BIAS := 0.08           # how far rivals cut toward a curve's inside
 const LATERAL_SPEED := 1.0        # lane-keeping drift, road-halves per second
+const LOOKAHEAD := 35             # segments scanned ahead (reaction time at speed)
 const DODGE_COMMIT := 0.5         # seconds a rival commits to a dodge direction
 const DODGE_RATE := 1.3           # committed dodge drift, road-halves/s at full speed
 const ACCEL := PlayerCar.MAX_SPEED / 4.0
 const RUBBER_RANGE := 12000.0     # gap beyond which rubber-banding kicks in
-const RUBBER_AHEAD := 0.97        # leaders ease off (barely — earn the catch)
+const RUBBER_AHEAD := 0.99        # leaders barely wait; earn the catch
 const RUBBER_BEHIND := 1.05       # stragglers push (capped below player max)
-const BONK_SPEED_CUT := 0.5       # hitting traffic halves a rival's speed
-const BONK_COOLDOWN := 2.0
+const BONK_SPEED_CUT := 0.75      # hitting traffic costs a rival a quarter of its speed
+const BONK_COOLDOWN := 1.5
 const RAM_DISTANCE := 700.0       # tuck-behind range for matching player speed
 const FLASH_RANGE := 2500.0       # overtakes flash only when they happen nearby
 
@@ -121,7 +122,7 @@ func update(dt: float, main: Node2D) -> void:
 		# deaf to opposite ones. Without this, per-frame dodge impulses
 		# alternate with lane-keeping pulling back toward the obstacle and
 		# the rival vibrates instead of swerving. ---
-		var dodge: float = main._car_steer(r, old_seg, player_seg, player_w)
+		var dodge: float = main._car_steer(r, old_seg, player_seg, player_w, LOOKAHEAD)
 		if absf(dodge) > 0.0001 \
 				and (float(r.dodge_t) <= 0.0 or signf(dodge) == float(r.dodge_dir)):
 			r.dodge_dir = signf(dodge)

@@ -157,10 +157,10 @@ last. The overall race clock (counting up, top center) starts on GO.
 Checkpoint stripes divide each stage into equal sections (`checkpoint_count`
 per level, default 2); the countdown timer is per-section, and crossing a
 checkpoint adds the section allotment on top of whatever you had left,
-OutRun style. Each crossing flashes your time delta against the
-fastest rival through that checkpoint — "+" means you're ahead, "-" behind,
-with tenths ("-0:03.4"). If you're first there, it shows your projected lead
-over the best chaser ("LEADER +0:02.3").
+OutRun style. Each crossing flashes your racing-standard
+time delta against the fastest rival through that checkpoint — "+" behind
+(red), "-" ahead (green), with tenths. If you're first there, it shows your
+cushion over the best chaser ("-0:02.3 (LEADER)", green).
 
 Finishing brings up the results board: finished racers with real times,
 still-racing rivals below in live running order (dimmed, times filling in

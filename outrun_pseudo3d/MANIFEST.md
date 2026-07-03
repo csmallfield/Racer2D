@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v9
+# Delivery Manifest — outrun_pseudo3d v10
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -22,7 +22,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v9 fixes checkpoint deltas (sign convention: + ahead / - behind, tenths precision, projected lead when first through), makes the leaderboard live (no projections; racers fill in as they finish), and raises difficulty (faster cruise ladder 0.84-0.99, better rival cornering, weaker rubber-banding).
+v10 switches deltas to racing convention (+ behind in red, - ahead in green), and raises difficulty again: cruise ladder 0.86-1.0, better rival cornering, 35-segment rival lookahead (fewer traffic bonks), softer bonk penalty, and near-zero leader rubber-banding.
+
+Previously: v9 fixes checkpoint deltas (sign convention: + ahead / - behind, tenths precision, projected lead when first through), makes the leaderboard live (no projections; racers fill in as they finish), and raises difficulty (faster cruise ladder 0.84-0.99, better rival cornering, weaker rubber-banding).
 
 Previously: v7 fixes the finish-rank bug (rank now derives from finish times, not wrapped progress) and rival dodge jitter (committed dodges with hysteresis), and adds: 3-2-1-GO countdown, checkpoint sections with timer extension and leader time deltas, an overall race clock, and an end-of-race leaderboard.
 

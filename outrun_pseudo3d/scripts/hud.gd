@@ -74,8 +74,10 @@ func set_position_rank(rank: int, total: int) -> void:
 
 
 ## Short race message ("PASSED VIPER!") that fades after a moment.
-func set_flash(text: String) -> void:
+## Color per call: checkpoint deltas use red (behind) / green (ahead).
+func set_flash(text: String, color: Color = Color(1, 0.9, 0.3)) -> void:
 	flash_label.text = text
+	flash_label.add_theme_color_override("font_color", color)
 	_flash_t = 2.0
 
 
