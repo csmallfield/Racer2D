@@ -23,7 +23,7 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
 	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "Arrows/WASD drive  •  R restart stage  •  N next stage"
+	hint_label.text = "Arrows/WASD or gamepad  •  R restart stage  •  N next stage"
 
 
 func _make_label(pos: Vector2, size: Vector2, font_size: int,

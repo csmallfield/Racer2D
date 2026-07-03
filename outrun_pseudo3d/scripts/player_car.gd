@@ -15,7 +15,7 @@ const CENTRIFUGAL := 0.3                   # how hard curves push you outward
 var position_z := 0.0     # distance along the track (world units)
 var x := 0.0              # lateral position, -1..1 = on road
 var speed := 0.0
-var steer_dir := 0        # -1 / 0 / +1, used by the renderer for car tilt
+var steer_dir := 0.0      # -1..1 analog steer amount, used for car tilt
 var bounce := 0.0         # vertical shake in screen px when off-road
 
 
@@ -26,21 +26,21 @@ func update(dt: float, main: Node) -> bool:
 	# At full speed you can cross the whole road in ~1 second.
 	var dx := dt * 2.0 * speed_percent
 
-	steer_dir = 0
-	if Input.is_action_pressed("steer_left"):
-		x -= dx
-		steer_dir = -1
-	elif Input.is_action_pressed("steer_right"):
-		x += dx
-		steer_dir = 1
+	# Analog on gamepads, -1/0/+1 on keyboard.
+	var steer := Input.get_axis("steer_left", "steer_right")
+	x += dx * steer
+	steer_dir = steer
 
 	# Centrifugal force: curves push the car toward the outside.
 	x -= dx * speed_percent * seg.curve * CENTRIFUGAL
 
-	if Input.is_action_pressed("accelerate"):
-		speed += ACCEL * dt
-	elif Input.is_action_pressed("brake"):
-		speed += BRAKING * dt
+	# Analog triggers scale acceleration/braking; keys give full strength.
+	var throttle := Input.get_action_strength("accelerate")
+	var brake_in := Input.get_action_strength("brake")
+	if throttle > 0.0:
+		speed += ACCEL * dt * throttle
+	elif brake_in > 0.0:
+		speed += BRAKING * dt * brake_in
 	else:
 		speed += DECEL * dt
 

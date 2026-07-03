@@ -7,6 +7,7 @@ func _init() -> void:
 	level_name = "STAGE 2 — DESERT PASS"
 	time_limit = 85.0
 	traffic_count = 16
+	music = "music_desert"
 	theme = {
 		"sky_top": Color(0.35, 0.15, 0.4),
 		"sky_bottom": Color(0.95, 0.6, 0.35),

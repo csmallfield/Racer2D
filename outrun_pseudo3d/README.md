@@ -10,13 +10,13 @@ main scene.
 
 ## Controls
 
-| Input | Action |
-|---|---|
-| Up / W | Accelerate |
-| Down / S | Brake |
-| Left / A, Right / D | Steer |
-| R | Restart current stage |
-| N | Skip to next stage (debug) |
+| Keyboard | Gamepad | Action |
+|---|---|---|
+| Up / W | A / right trigger (analog) | Accelerate |
+| Down / S | X / left trigger (analog) | Brake |
+| Left / A, Right / D | Left stick (analog) / d-pad | Steer |
+| R | Back/Select | Restart current stage |
+| N | Start | Skip to next stage (debug) |
 
 Reach the finish line (dark stripe) before the timer runs out. Hitting
 scenery or slower traffic kills your speed. Driving on the grass slows you
@@ -132,11 +132,32 @@ Road/grass/sky colors are per-level in each level's `theme` dictionary.
 | Segment length, stripe width, curve/hill presets | constants in `track_builder.gd` |
 | Timer, traffic density, palette | per level in `scripts/levels/*.gd` |
 
+## Audio
+
+The game is fully wired for sound but ships with **no audio files** — every
+sound is a silent no-op until a matching file appears in `assets/audio/`.
+The complete list of expected filenames with descriptions lives in
+**`assets/audio/SOUNDS.md`**. Drop files in one at a time; nothing errors
+when files are missing.
+
+What's wired up: engine loop pitch-shifted with speed (0.7×–1.9×), off-road
+rumble loop, skid on hard high-speed steering, crash (scenery) and bump
+(traffic) impacts, per-second countdown beeps in the final 10 seconds,
+stage-clear and game-over stings, and per-level looping music (levels name
+their track via `music = "music_coastal"`; see `TrackLevel`).
+
+Mix levels are constants at the top of `scripts/audio_manager.gd` (an
+autoload registered as `Audio`).
+
+## Traffic AI
+
+NPC cars scan up to 20 segments ahead and swerve around slower cars and the
+player (steering harder the closer the obstacle), then drift back toward the
+road if they've wandered wide — a port of codeincomplete's `updateCarOffset`.
+Cars outside the drawn window skip AI entirely.
+
 ## Known limitations / obvious next steps
 
-- No audio yet (engine pitch tied to `player.speed` is the natural first add).
-- Traffic drives in fixed lanes with no avoidance AI.
-- Keyboard only; add gamepad events to the actions in Project Settings → Input Map.
 - Single road ribbon — OutRun's forks/wide freeway use a second overlapped
   road, which this architecture supports but doesn't implement.
 - If you later want thousands of draw calls (dense scenery), move sprite
