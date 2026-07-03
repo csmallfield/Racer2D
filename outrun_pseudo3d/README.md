@@ -10,13 +10,13 @@ main scene.
 
 ## Controls
 
-| Input | Action |
-|---|---|
-| Up / W | Accelerate |
-| Down / S | Brake |
-| Left / A, Right / D | Steer |
-| R | Restart current stage |
-| N | Skip to next stage (debug) |
+| Keyboard | Gamepad | Action |
+|---|---|---|
+| Up / W | A / right trigger (analog) | Accelerate |
+| Down / S | X / left trigger (analog) | Brake |
+| Left / A, Right / D | Left stick (analog) / d-pad | Steer |
+| R | Back/Select | Restart current stage |
+| N | Start | Skip to next stage (debug) |
 
 Reach the finish line (dark stripe) before the timer runs out. Hitting
 scenery or slower traffic kills your speed. Driving on the grass slows you
@@ -132,12 +132,55 @@ Road/grass/sky colors are per-level in each level's `theme` dictionary.
 | Segment length, stripe width, curve/hill presets | constants in `track_builder.gd` |
 | Timer, traffic density, palette | per level in `scripts/levels/*.gd` |
 
+## Audio
+
+The game is fully wired for sound but ships with **no audio files** — every
+sound is a silent no-op until a matching file appears in `assets/audio/`.
+The complete list of expected filenames with descriptions lives in
+**`assets/audio/SOUNDS.md`**. Drop files in one at a time; nothing errors
+when files are missing.
+
+What's wired up: engine loop pitch-shifted with speed (0.7×–1.9×), off-road
+rumble loop, skid on hard high-speed steering, crash (scenery) and bump
+(traffic) impacts, per-second countdown beeps in the final 10 seconds,
+stage-clear and game-over stings, and per-level looping music (levels name
+their track via `music = "music_coastal"`; see `TrackLevel`).
+
+Mix levels are constants at the top of `scripts/audio_manager.gd` (an
+autoload registered as `Audio`).
+
+## Traffic AI
+
+NPC cars scan up to 20 segments ahead and swerve around slower cars and the
+player (steering harder the closer the obstacle), then drift back toward the
+road if they've wandered wide — a port of codeincomplete's `updateCarOffset`.
+Cars outside the drawn window skip AI entirely.
+
+## AI opponents
+
+Nine named rivals (VIPER, NATASHA, BIFF, ...) race the same start-to-finish
+run — Road Rash's pack model, minus the combat. You grid up last and race
+through them; the HUD shows your live position bottom-right ("3rd / 10"),
+nearby overtakes flash on screen, and the stage-clear message reports where
+you finished.
+
+What makes them beatable: each rival has a personality cruise speed (the
+roster is a ladder from easy prey to genuinely fast), and they all brake for
+curves proportionally to severity — holding your nerve through corners is
+where you gain. Mild rubber-banding keeps the pack alive without feeling
+rigged. They swerve around traffic, each other, and you; a failed dodge into
+slow traffic costs them half their speed.
+
+Rivals share the traffic infrastructure (same per-segment car lists), so
+rendering, avoidance, and collisions need no special cases. Tuning constants
+live at the top of `scripts/rivals.gd`; per-level pack size via
+`rival_count` in the level script.
+
 ## Known limitations / obvious next steps
 
-- No audio yet (engine pitch tied to `player.speed` is the natural first add).
-- Traffic drives in fixed lanes with no avoidance AI.
-- Keyboard only; add gamepad events to the actions in Project Settings → Input Map.
-- Single road ribbon — OutRun's forks/wide freeway use a second overlapped
+- Rivals never crash out entirely or vary behavior per lap — no rivalry
+  memory, no aggression personalities beyond speed. Easy extensions in
+  `rivals.gd` if the racing needs more texture. — OutRun's forks/wide freeway use a second overlapped
   road, which this architecture supports but doesn't implement.
 - If you later want thousands of draw calls (dense scenery), move sprite
   drawing from `_draw()` to a `MultiMesh` or `RenderingServer` batching pass.

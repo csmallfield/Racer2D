@@ -4,6 +4,7 @@ extends Node2D
 
 const LEVELS_DIR := "res://scripts/levels"
 const STAGE_CLEAR_DELAY := 3.0
+const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
 
 enum State { RUNNING, STAGE_CLEAR, GAME_OVER }
 
@@ -13,6 +14,7 @@ var level: TrackLevel
 var track: TrackBuilder
 var player: PlayerCar
 var cars: Array = []
+var rivals: RivalManager
 
 var renderer: RoadRenderer
 var hud: HudLayer
@@ -20,6 +22,7 @@ var hud: HudLayer
 var state: State = State.RUNNING
 var time_left := 0.0
 var state_timer := 0.0
+var _last_beep_second := -1     # last whole second a time_warning beep fired
 
 
 func _ready() -> void:
@@ -66,11 +69,16 @@ func _load_level(idx: int) -> void:
 
 	player = PlayerCar.new()
 	_spawn_traffic()
+	rivals = RivalManager.new()
+	rivals.spawn(self, level.rival_count)
 
 	time_left = level.time_limit
 	state = State.RUNNING
+	_last_beep_second = -1
 	hud.set_stage(level.level_name)
 	hud.set_message("")
+	Audio.stop_engine()
+	Audio.play_music(level.music)
 
 
 func _spawn_traffic() -> void:
@@ -126,28 +134,46 @@ func _process(dt: float) -> void:
 func _run_frame(dt: float) -> void:
 	var crossed := player.update(dt, self)
 	_update_traffic(dt)
+	rivals.update(dt, self)
+	for e in rivals.events:
+		hud.set_flash(e)
+	hud.set_position_rank(rivals.player_rank(player.position_z), rivals.total_racers())
 	_check_collisions()
 	_scroll_background(dt)
+	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED,
+			absf(player.x) > 1.0, player.steer_dir)
 
 	time_left -= dt
+	var whole_seconds := int(ceilf(time_left))
+	if whole_seconds <= 10 and whole_seconds >= 1 and whole_seconds != _last_beep_second:
+		_last_beep_second = whole_seconds
+		Audio.play("time_warning")
+
 	if crossed:
 		state = State.STAGE_CLEAR
 		state_timer = STAGE_CLEAR_DELAY
-		hud.set_message("STAGE CLEAR!")
+		var final_rank := rivals.player_rank(player.position_z)
+		hud.set_message("FINISHED %s of %d!"
+				% [HudLayer.ordinal(final_rank), rivals.total_racers()])
+		Audio.play("stage_clear")
 	elif time_left <= 0.0:
 		time_left = 0.0
 		state = State.GAME_OVER
 		hud.set_message("TIME UP — press R to retry")
+		Audio.play("game_over")
 
 
 ## Keeps the world moving (with input disabled) during clear/game-over states.
 func _coast_frame(dt: float, target_speed: float) -> void:
 	player.speed = move_toward(player.speed, target_speed, PlayerCar.MAX_SPEED * 0.5 * dt)
 	player.position_z = fposmod(player.position_z + player.speed * dt, track.track_length())
-	player.steer_dir = 0
+	player.steer_dir = 0.0
 	player.bounce = 0.0
+	player.x = move_toward(player.x, 0.0, dt * 1.5)
 	_update_traffic(dt)
+	rivals.update(dt, self)
 	_scroll_background(dt)
+	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED, false)
 
 
 func _scroll_background(dt: float) -> void:
@@ -157,14 +183,72 @@ func _scroll_background(dt: float) -> void:
 
 func _update_traffic(dt: float) -> void:
 	var track_len := track.track_length()
+	var player_seg := find_segment(player.position_z)
+	var player_w: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
 	for car in cars:
 		var old_seg := find_segment(car.z)
+		car.offset = clampf(
+				float(car.offset) + _car_steer(car, old_seg, player_seg, player_w) * dt * 60.0,
+				-1.2, 1.2)
 		car.z = fposmod(car.z + car.speed * dt, track_len)
 		var new_seg := find_segment(car.z)
 		if old_seg.index != new_seg.index:
 			old_seg.cars.erase(car)
 			new_seg.cars.append(car)
 
+
+## Per-frame lateral steering for one NPC car (codeincomplete's updateCarOffset).
+## Scans up to AI_LOOKAHEAD segments ahead; dodges the player and slower cars,
+## steering harder the closer the obstacle. Returns offset delta per 1/60 s.
+func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
+		player_w: float) -> float:
+	var seg_count := track.segments.size()
+	# Cars far outside the drawn window don't need AI (invisible anyway).
+	var rel: int = (int(car_seg.index) - int(player_seg.index) + seg_count) % seg_count
+	if rel > RoadRenderer.DRAW_DISTANCE:
+		return 0.0
+
+	var car_w: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
+	var car_x: float = float(car.offset)
+	for i in range(1, AI_LOOKAHEAD):
+		var seg: Dictionary = track.segments[(int(car_seg.index) + i) % seg_count]
+
+		# Player ahead of us, we're faster, and paths overlap: swerve.
+		if seg.index == player_seg.index and car.speed > player.speed \
+				and _overlap(player.x, player_w, car_x, car_w, 1.2):
+			var dir := 0.0
+			if player.x > 0.5:
+				dir = -1.0
+			elif player.x < -0.5:
+				dir = 1.0
+			else:
+				dir = 1.0 if car_x > player.x else -1.0
+			return dir / float(i) * float(car.speed - player.speed) / PlayerCar.MAX_SPEED
+
+		# Slower car ahead: swerve around it.
+		for other in seg.cars:
+			if other == car:
+				continue
+			var other_w: float = SpriteCatalog.get_def(other.sprite).world_w \
+					/ RoadRenderer.ROAD_WIDTH
+			var other_x: float = float(other.offset)
+			if car.speed > other.speed \
+					and _overlap(car_x, car_w, other_x, other_w, 1.2):
+				var dir := 0.0
+				if other_x > 0.5:
+					dir = -1.0
+				elif other_x < -0.5:
+					dir = 1.0
+				else:
+					dir = 1.0 if car_x > other_x else -1.0
+				return dir / float(i) * float(car.speed - other.speed) / PlayerCar.MAX_SPEED
+
+	# Nothing ahead: drift back toward the road if we've wandered wide.
+	if float(car.offset) < -0.9:
+		return 0.1
+	if float(car.offset) > 0.9:
+		return -0.1
+	return 0.0
 
 func _check_collisions() -> void:
 	var seg := find_segment(player.position_z + renderer.player_z())
@@ -179,6 +263,7 @@ func _check_collisions() -> void:
 			var sw: float = def.world_w / RoadRenderer.ROAD_WIDTH
 			if _overlap(player.x, player_w, spr.offset, sw):
 				player.speed = PlayerCar.MAX_SPEED * 0.06
+				Audio.play("crash", 0.0, 1.0, 0.5)
 				break
 
 	# Traffic: rear-ending a slower car slams your speed down and pushes
@@ -190,6 +275,7 @@ func _check_collisions() -> void:
 		if _overlap(player.x, player_w, car.offset, cw, 0.8):
 			player.speed = car.speed * (car.speed / maxf(player.speed, 1.0))
 			player.position_z = fposmod(car.z - renderer.player_z(), track.track_length())
+			Audio.play("bump", 0.0, 1.0, 0.3)
 			break
 
 

@@ -143,13 +143,13 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 			var percent := fposmod(car.z, seg_len) / seg_len
 			var sc := lerpf(seg.p1.screen.scale, seg.p2.screen.scale, percent)
 			var sx: float = lerpf(seg.p1.screen.x, seg.p2.screen.x, percent) \
-					+ sc * car.offset * ROAD_WIDTH * w * 0.5
+					+ sc * float(car.offset) * ROAD_WIDTH * w * 0.5
 			var sy := lerpf(seg.p1.screen.y, seg.p2.screen.y, percent)
 			_draw_sprite(car.sprite, sc, sx, sy, seg.clip, w, fog_mod)
 
 		for spr in seg.sprites:
 			var sc: float = seg.p1.screen.scale
-			var sx: float = seg.p1.screen.x + sc * spr.offset * ROAD_WIDTH * w * 0.5
+			var sx: float = seg.p1.screen.x + sc * float(spr.offset) * ROAD_WIDTH * w * 0.5
 			var sy: float = seg.p1.screen.y
 			_draw_sprite(spr.name, sc, sx, sy, seg.clip, w, fog_mod)
 
@@ -180,6 +180,15 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 	# Grass strip for this slice.
 	draw_rect(Rect2(0, y2, w, y1 - y2), grass)
 
+	var draw_lanes: bool = light and seg.special == ""
+	var lane_col: Color = th.lane.lerp(fogc, fog)
+	_draw_ribbon(x1, y1, w1, x2, y2, w2, road, rumble, draw_lanes, lane_col)
+
+
+## One road ribbon: rumble strips, surface, lane lines.
+func _draw_ribbon(x1: float, y1: float, w1: float, x2: float, y2: float,
+		w2: float, road: Color, rumble: Color, draw_lanes: bool,
+		lane_col: Color) -> void:
 	# Rumble strips.
 	var r1 := w1 / maxf(6.0, 2.0 * LANES)
 	var r2 := w2 / maxf(6.0, 2.0 * LANES)
@@ -190,8 +199,7 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 	_quad(x1 - w1, y1, x1 + w1, y1, x2 + w2, y2, x2 - w2, y2, road)
 
 	# Lane lines on light stripes only (classic dashed look).
-	if light and seg.special == "":
-		var lane_col: Color = th.lane.lerp(fogc, fog)
+	if draw_lanes:
 		var l1 := w1 / maxf(32.0, 8.0 * LANES)
 		var l2 := w2 / maxf(32.0, 8.0 * LANES)
 		var lw1 := w1 * 2.0 / LANES

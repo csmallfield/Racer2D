@@ -10,6 +10,9 @@ var time_label: Label
 var stage_label: Label
 var message_label: Label
 var hint_label: Label
+var position_label: Label
+var flash_label: Label
+var _flash_t := 0.0
 
 
 func _ready() -> void:
@@ -21,9 +24,13 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
 	message_label = _make_label(Vector2(0, 280), Vector2(1280, 100), 56,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
+	position_label = _make_label(Vector2(856, 644), Vector2(400, 56), 40,
+			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
+	flash_label = _make_label(Vector2(0, 380), Vector2(1280, 40), 26,
+			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
 	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "Arrows/WASD drive  •  R restart stage  •  N next stage"
+	hint_label.text = "Arrows/WASD or gamepad  •  R restart stage  •  N next stage"
 
 
 func _make_label(pos: Vector2, size: Vector2, font_size: int,
@@ -54,3 +61,31 @@ func set_stage(stage_name: String) -> void:
 
 func set_message(text: String) -> void:
 	message_label.text = text
+
+
+func set_position_rank(rank: int, total: int) -> void:
+	position_label.text = "%s / %d" % [ordinal(rank), total]
+
+
+## Short race message ("PASSED VIPER!") that fades after a moment.
+func set_flash(text: String) -> void:
+	flash_label.text = text
+	_flash_t = 2.0
+
+
+func _process(dt: float) -> void:
+	if _flash_t > 0.0:
+		_flash_t -= dt
+		flash_label.modulate.a = clampf(_flash_t / 0.6, 0.0, 1.0)
+		if _flash_t <= 0.0:
+			flash_label.text = ""
+
+
+static func ordinal(n: int) -> String:
+	var suffix := "th"
+	if n % 100 < 11 or n % 100 > 13:
+		match n % 10:
+			1: suffix = "st"
+			2: suffix = "nd"
+			3: suffix = "rd"
+	return "%d%s" % [n, suffix]

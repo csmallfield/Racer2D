@@ -8,6 +8,7 @@ func _init() -> void:
 	level_name = "STAGE 1 — COASTAL RUN"
 	time_limit = 80.0
 	traffic_count = 12
+	music = "music_coastal"
 	theme = {
 		"sky_top": Color(0.12, 0.35, 0.82),
 		"sky_bottom": Color(0.55, 0.78, 0.95),

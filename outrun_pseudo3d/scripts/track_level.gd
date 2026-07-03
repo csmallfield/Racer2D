@@ -14,6 +14,8 @@ extends RefCounted
 var level_name := "UNNAMED STAGE"
 var time_limit := 70.0       # seconds to reach the finish line
 var traffic_count := 10      # number of NPC cars on the track
+var rival_count := 9         # AI opponents racing you (max 9); rank shows N+1 total
+var music := ""              # sound name in assets/audio/, e.g. "music_coastal"
 
 ## Colors used by the renderer. Override any/all of these per level.
 var theme := {
