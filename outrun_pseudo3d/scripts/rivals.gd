@@ -25,18 +25,18 @@ const NAMES: Array[String] = [
 	"DIABLO", "JUNKO", "AXEL", "GROG",
 ]
 const GRID_GAP := 500.0           # world units between grid slots at the start
-const CRUISE_MIN := 0.80          # slowest rival cruise, fraction of MAX_SPEED
-const CRUISE_MAX := 0.96          # fastest rival cruise
-const CURVE_SLOWDOWN := 0.045     # cruise loss per unit of curve severity
-const CURVE_SLOWDOWN_CAP := 0.32
+const CRUISE_MIN := 0.84          # slowest rival cruise, fraction of MAX_SPEED
+const CRUISE_MAX := 0.99          # fastest rival cruise
+const CURVE_SLOWDOWN := 0.038     # cruise loss per unit of curve severity
+const CURVE_SLOWDOWN_CAP := 0.28
 const APEX_BIAS := 0.08           # how far rivals cut toward a curve's inside
 const LATERAL_SPEED := 1.0        # lane-keeping drift, road-halves per second
 const DODGE_COMMIT := 0.5         # seconds a rival commits to a dodge direction
 const DODGE_RATE := 1.3           # committed dodge drift, road-halves/s at full speed
 const ACCEL := PlayerCar.MAX_SPEED / 4.0
-const RUBBER_RANGE := 15000.0     # gap beyond which rubber-banding kicks in
-const RUBBER_AHEAD := 0.93        # leaders ease off
-const RUBBER_BEHIND := 1.07       # stragglers push (capped below player max)
+const RUBBER_RANGE := 12000.0     # gap beyond which rubber-banding kicks in
+const RUBBER_AHEAD := 0.97        # leaders ease off (barely — earn the catch)
+const RUBBER_BEHIND := 1.05       # stragglers push (capped below player max)
 const BONK_SPEED_CUT := 0.5       # hitting traffic halves a rival's speed
 const BONK_COOLDOWN := 2.0
 const RAM_DISTANCE := 700.0       # tuck-behind range for matching player speed
@@ -204,20 +204,34 @@ static func _overlap(x1: float, w1: float, x2: float, w2: float,
 	return not (x1 + w1 * half < x2 - w2 * half or x1 - w1 * half > x2 + w2 * half)
 
 
-## Final results at the moment the player crosses the line: finished rivals
-## use their recorded times; still-racing rivals get a projected finish
-## (remaining distance at a stabilized speed — arcade-honest, and it keeps
-## the board consistent with track positions). Sorted by time; the caller
-## finds the player row for rank and highlighting.
-func board_entries(player_time: float, track_len: float) -> Array:
-	var entries: Array = [
+## Live results: finished racers sorted by time, then still-racing rivals in
+## their current running order with no time (they fill in as they cross —
+## refresh each frame while the board is up). The player row's index is the
+## final rank.
+func board_entries(player_time: float) -> Array:
+	var finished: Array = [
 		{"name": "YOU", "time": player_time, "is_player": true},
 	]
+	var racing: Array = []
 	for r in rivals:
-		var t: float = float(r.finish_time)
-		if t < 0.0:
-			var proj_speed: float = maxf(float(r.speed), float(r.base_speed) * 0.8)
-			t = player_time + (track_len - float(r.z)) / proj_speed
-		entries.append({"name": r.name, "time": t, "is_player": false})
-	entries.sort_custom(func(a, b): return float(a.time) < float(b.time))
-	return entries
+		if float(r.finish_time) >= 0.0:
+			finished.append({"name": r.name, "time": float(r.finish_time),
+					"is_player": false})
+		else:
+			racing.append({"name": r.name, "time": -1.0, "is_player": false,
+					"z": float(r.z)})
+	finished.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	racing.sort_custom(func(a, b): return float(a.z) > float(b.z))
+	return finished + racing
+
+
+## Projected seconds until the best-placed rival still short of a checkpoint
+## reaches it — the "how far ahead am I?" number when the player leads.
+func next_rival_eta(cp_z: float) -> float:
+	var best := INF
+	for r in rivals:
+		if float(r.z) < cp_z:
+			var eta: float = (cp_z - float(r.z)) \
+					/ maxf(float(r.speed), PlayerCar.MAX_SPEED * 0.2)
+			best = minf(best, eta)
+	return best if best < INF else 0.0

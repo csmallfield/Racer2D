@@ -157,13 +157,15 @@ last. The overall race clock (counting up, top center) starts on GO.
 Checkpoint stripes divide each stage into equal sections (`checkpoint_count`
 per level, default 2); the countdown timer is per-section, and crossing a
 checkpoint adds the section allotment on top of whatever you had left,
-OutRun style. Each crossing also flashes your time delta against the
-fastest rival through that checkpoint ("+00:03" behind, "-00:02" ahead —
-or "LEADER!" if nobody has beaten you to it).
+OutRun style. Each crossing flashes your time delta against the
+fastest rival through that checkpoint — "+" means you're ahead, "-" behind,
+with tenths ("-0:03.4"). If you're first there, it shows your projected lead
+over the best chaser ("LEADER +0:02.3").
 
-Finishing brings up the results board: every racer's position, name, and
-time (rivals still on course get an honest arcade projection), with your
-row highlighted. Press accelerate to continue to the next stage.
+Finishing brings up the results board: finished racers with real times,
+still-racing rivals below in live running order (dimmed, times filling in
+as they cross — the race clock keeps running behind the board). Your row is
+highlighted. Press accelerate to continue to the next stage.
 
 ## Traffic AI
 

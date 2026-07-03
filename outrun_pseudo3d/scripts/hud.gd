@@ -122,10 +122,14 @@ func show_leaderboard(entries: Array, title: String = "RACE RESULTS") -> void:
 	rows += "[table=3]"
 	for i in range(entries.size()):
 		var e: Dictionary = entries[i]
-		var open_tag := "[color=#ffd24d]" if bool(e.is_player) else "[color=#e8e8e8]"
+		var racing: bool = float(e.time) < 0.0
+		var open_tag := "[color=#ffd24d]"
+		if not bool(e.is_player):
+			open_tag = "[color=#777777]" if racing else "[color=#e8e8e8]"
+		var time_str := "—:——" if racing else format_time(float(e.time))
 		rows += "[cell]%s %s  [/color][/cell]" % [open_tag, ordinal(i + 1)]
 		rows += "[cell]%s %s  [/color][/cell]" % [open_tag, String(e.name)]
-		rows += "[cell]%s%s[/color][/cell]" % [open_tag, format_time(float(e.time))]
+		rows += "[cell]%s%s[/color][/cell]" % [open_tag, time_str]
 	rows += "[/table]"
 	rows += "\n[center][color=#aaaaaa]accelerate to continue[/color][/center]"
 	board_label.text = rows
