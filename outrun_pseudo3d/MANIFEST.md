@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v10
+# Delivery Manifest — outrun_pseudo3d v11
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -17,12 +17,18 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/sprite_catalog.gd | 173 | Placeholder art registry — runtime-generated textures; single swap point for real art later |
 | scripts/hud.gd | ~95 | HUD: speed, timer, stage name, center message, race position, overtake flashes |
 | scripts/rivals.gd | ~180 | RivalManager: Road Rash-style opponent AI, ranking, overtake events |
+| scripts/menu.gd | ~110 | MenuLayer: title menu, stage picker, best-times board (visual only) |
+| scripts/records.gd | ~55 | Records: persistent top-10 times per stage per mode (JSON in user://) |
+| scripts/levels/level_04_city.gd | ~60 | Stage 4: flat street grid, hard corners, heavy traffic, skyline |
+| scripts/levels/level_05_jungle.gd | ~60 | Stage 5: winding hilly dirt road, dense canopy, green haze |
 | scripts/levels/level_01_coastal.gd | 56 | Stage 1 (reference example): rolling hills, S-curves, palms, daytime palette |
 | scripts/levels/level_02_desert.gd | 53 | Stage 2: harder curves, bigger elevation, more traffic, dusk palette |
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v10 switches deltas to racing convention (+ behind in red, - ahead in green), and raises difficulty again: cruise ladder 0.86-1.0, better rival cornering, 35-segment rival lookahead (fewer traffic bonks), softer bonk penalty, and near-zero leader rubber-banding.
+v11 adds: title menu (RACE / TIME TRIAL / BEST TIMES / QUIT) over an idle backdrop with menu music; stage picker; time-trial mode (no rivals, no deltas); persistent per-stage per-mode top-10 best times (user://best_times.json) with a browsable board; two new stages (Neon City, Jungle Run) with building/streetlight sprites; Esc-to-menu from any race state.
+
+Previously: v10 switches deltas to racing convention (+ behind in red, - ahead in green), and raises difficulty again: cruise ladder 0.86-1.0, better rival cornering, 35-segment rival lookahead (fewer traffic bonks), softer bonk penalty, and near-zero leader rubber-banding.
 
 Previously: v9 fixes checkpoint deltas (sign convention: + ahead / - behind, tenths precision, projected lead when first through), makes the leaderboard live (no projections; racers fill in as they finish), and raises difficulty (faster cruise ladder 0.84-0.99, better rival cornering, weaker rubber-banding).
 

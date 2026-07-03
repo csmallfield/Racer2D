@@ -58,7 +58,7 @@ func spawn(main: Node2D, count: int) -> void:
 	var cp_count: int = main.cp_zs.size()
 	for k in range(cp_count):
 		leader_cp_times.append(-1.0)
-	var n := clampi(count, 1, NAMES.size())
+	var n := clampi(count, 0, NAMES.size())
 	for i in range(n):
 		var t := float(i) / float(maxi(1, n - 1))
 		var base: float = lerpf(CRUISE_MIN, CRUISE_MAX, t) * PlayerCar.MAX_SPEED

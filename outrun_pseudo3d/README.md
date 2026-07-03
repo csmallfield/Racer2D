@@ -149,6 +149,22 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Menu, modes, and best times
+
+The game boots to a title menu (over an idle stage backdrop): **RACE**
+(you versus the rival pack), **TIME TRIAL** (no rivals — you, the traffic,
+and the clock), **BEST TIMES**, and QUIT. Menus navigate with arrows /
+d-pad and confirm with Enter / Space / gamepad A; Esc backs out, including
+from a running race.
+
+Both modes go through a stage picker. Finishing any stage records your time
+to a persistent per-stage, per-mode top-10 (saved as JSON in `user://`),
+browsable from BEST TIMES (steer to flip through stages). Race finishes show
+the race results board (with "BEST #n" in the title when you set one); time
+trial finishes show the stage's all-time top 10 with your run highlighted.
+In time trial the checkpoint flash has no delta — there's nobody to be
+behind.
+
 ## Race structure
 
 Races start with a 3…2…1…GO countdown — everyone gridded and held, you

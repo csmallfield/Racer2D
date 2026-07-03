@@ -36,7 +36,7 @@ func _ready() -> void:
 	_make_leaderboard()
 	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "Arrows/WASD or gamepad  •  R restart stage  •  N next stage"
+	hint_label.text = "Arrows/WASD or gamepad  •  R restart  •  N next  •  Esc menu"
 
 
 func _make_label(pos: Vector2, size: Vector2, font_size: int,
@@ -67,6 +67,13 @@ func set_stage(stage_name: String) -> void:
 
 func set_message(text: String) -> void:
 	message_label.text = text
+
+
+## Reset per-race HUD elements (position, flash) between modes/menu.
+func clear_race_ui() -> void:
+	position_label.text = ""
+	flash_label.text = ""
+	_flash_t = 0.0
 
 
 func set_position_rank(rank: int, total: int) -> void:
