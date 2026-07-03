@@ -55,6 +55,7 @@ static func _build_all() -> void:
 		_cache["rival_%d" % i] = {
 			"texture": _make_rival(rival_colors[i]),
 			"world_w": 510.0, "world_h": 295.0, "collidable": true,
+			"map_color": rival_colors[i],   # progress-bar dot color
 		}
 	_cache["building"] = {
 		"texture": _make_building(Color(0.16, 0.17, 0.24), Color(0.95, 0.85, 0.4)),

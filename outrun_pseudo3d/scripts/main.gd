@@ -5,7 +5,7 @@ extends Node2D
 const LEVELS_DIR := "res://scripts/levels"
 const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
 
-enum State { MENU, LEVEL_SELECT, LEADERBOARD, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER }
+enum State { MENU, LEVEL_SELECT, LEADERBOARD, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 enum Mode { RACE, TIME_TRIAL }
 
 const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "QUIT"]
@@ -27,6 +27,7 @@ var mode: Mode = Mode.RACE
 var menu: MenuLayer
 var menu_sel := 0               # highlighted row in the current menu view
 var select_sel := 0             # highlighted stage in level select / board
+var paused_from: State = State.RUNNING   # state to resume into after pause
 var time_left := 0.0
 var countdown_t := 0.0          # 3..0 pre-race countdown
 var _last_count := -1           # last whole second announced in the countdown
@@ -114,6 +115,10 @@ func _load_level(idx: int) -> void:
 func _start_race(idx: int) -> void:
 	_load_level(idx)
 	menu.hide_menu()
+	var fractions: Array = []
+	for z in cp_zs:
+		fractions.append(z / track.track_length())
+	hud.setup_progress(fractions)
 	state = State.COUNTDOWN
 	countdown_t = 3.0
 	_last_count = -1
@@ -164,6 +169,18 @@ func _check_player_checkpoint(prev_z: float) -> void:
 		player_next_cp += 1
 
 
+func _update_progress_bar() -> void:
+	var track_len := track.track_length()
+	var dots: Array = []
+	for r in rivals.rivals:
+		var def: Dictionary = SpriteCatalog.get_def(r.sprite)
+		dots.append({
+			"p": minf(float(r.z) / track_len, 1.0),
+			"color": def.get("map_color", Color.WHITE),
+		})
+	hud.update_progress(player.position_z / track_len, dots)
+
+
 func _spawn_traffic() -> void:
 	cars.clear()
 	for seg in track.segments:
@@ -205,6 +222,19 @@ func _process(dt: float) -> void:
 		_enter_menu()
 		return
 
+	# Pause toggle (P / gamepad Start) during the countdown or the race.
+	if Input.is_action_just_pressed("pause"):
+		if state == State.RUNNING or state == State.COUNTDOWN:
+			paused_from = state
+			state = State.PAUSED
+			hud.set_message("PAUSED")
+			Audio.stop_engine()
+		elif state == State.PAUSED:
+			state = paused_from
+			hud.set_message("")
+			_last_count = -1   # countdown repaints its number on resume
+		return
+
 	match state:
 		State.MENU:
 			_menu_frame(dt)
@@ -226,6 +256,8 @@ func _process(dt: float) -> void:
 				_start_race(level_index + 1)
 		State.GAME_OVER:
 			_coast_frame(dt, 0.0)
+		State.PAUSED:
+			pass   # world frozen; only the pause toggle and Esc are live
 
 	hud.set_speed(player.speed_kmh())
 	hud.set_time(time_left)
@@ -351,6 +383,11 @@ func _run_frame(dt: float) -> void:
 			hud.set_flash(e)
 		hud.set_position_rank(rivals.player_rank(player.position_z),
 				rivals.total_racers())
+	_update_progress_bar()
+
+	# Slipstream whoosh as the tow reaches full strength.
+	if player.slip > 0.9:
+		Audio.play("slipstream", -4.0, 1.0, 1.5)
 	_check_collisions()
 	_scroll_background(dt)
 	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED,

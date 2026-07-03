@@ -34,6 +34,7 @@ script) — add matching files here.
 | `countdown_beep` | Short low blip for the 3…2…1 pre-race countdown (plays three times). |
 | `countdown_go` | Higher, punchier "GO!" tone as the race starts. |
 | `checkpoint` | Bright chime when crossing a checkpoint stripe. |
+| `slipstream` | Soft airy whoosh when the slipstream tow reaches full strength (tucked close behind another car at speed). |
 | `stage_clear` | Short victory jingle, 1–3 s, plays once at the finish line. |
 | `game_over` | Descending sting for time-up. |
 | `time_warning` | Single short beep. Fires once per second during the last 10 seconds, so keep it under ~0.4 s and not annoying at 10 repetitions. |

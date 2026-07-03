@@ -16,6 +16,7 @@ var race_time_label: Label
 var board_bg: ColorRect
 var board_label: RichTextLabel
 var _flash_t := 0.0
+var track_bar: TrackBar
 
 
 func _ready() -> void:
@@ -33,10 +34,15 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
 	race_time_label = _make_label(Vector2(0, 72), Vector2(1280, 30), 20,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
+	track_bar = TrackBar.new()
+	track_bar.position = Vector2(240, 662)
+	track_bar.size = Vector2(800, 12)
+	track_bar.visible = false
+	add_child(track_bar)
 	_make_leaderboard()
 	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "Arrows/WASD or gamepad  •  R restart  •  N next  •  Esc menu"
+	hint_label.text = "Arrows/WASD or gamepad  •  R restart  •  N next  •  P pause  •  Esc menu"
 
 
 func _make_label(pos: Vector2, size: Vector2, font_size: int,
@@ -74,6 +80,7 @@ func clear_race_ui() -> void:
 	position_label.text = ""
 	flash_label.text = ""
 	_flash_t = 0.0
+	hide_progress()
 
 
 func set_position_rank(rank: int, total: int) -> void:
@@ -159,3 +166,45 @@ static func format_time(t: float) -> String:
 	var m := int(t / 60.0)
 	var sec := fmod(t, 60.0)
 	return "%d:%04.1f" % [m, sec]
+
+
+## Show the progress bar for a new race. cp_fractions: checkpoint positions
+## as 0..1 along the track.
+func setup_progress(cp_fractions: Array) -> void:
+	track_bar.cp_fractions = cp_fractions
+	track_bar.player_p = 0.0
+	track_bar.dots = []
+	track_bar.visible = true
+	track_bar.queue_redraw()
+
+
+## dots: [{p: 0..1, color: Color}] — one per rival. Empty in time trial.
+func update_progress(player_p: float, dots: Array) -> void:
+	track_bar.player_p = player_p
+	track_bar.dots = dots
+	track_bar.queue_redraw()
+
+
+func hide_progress() -> void:
+	track_bar.visible = false
+
+
+## Thin strip mapping the whole track: checkpoint ticks, a finish tick,
+## rival dots in their livery colors, and a larger gold player marker.
+class TrackBar:
+	extends Control
+
+	var cp_fractions: Array = []
+	var dots: Array = []
+	var player_p := 0.0
+
+	func _draw() -> void:
+		var w := size.x
+		draw_rect(Rect2(0, 5, w, 2), Color(1, 1, 1, 0.35))
+		for f in cp_fractions:
+			draw_rect(Rect2(float(f) * w - 1.0, 1, 2, 10), Color(1, 1, 1, 0.6))
+		draw_rect(Rect2(w - 2.0, 0, 3, 12), Color(1, 0.9, 0.3, 0.9))
+		for d in dots:
+			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 6.0), 3.0, d.color)
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 6.0), 5.0, Color(0.1, 0.1, 0.1))
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 6.0), 4.0, Color(1, 0.85, 0.2))

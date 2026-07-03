@@ -165,6 +165,23 @@ trial finishes show the stage's all-time top 10 with your run highlighted.
 In time trial the checkpoint flash has no delta — there's nobody to be
 behind.
 
+## Driving techniques and race HUD
+
+**Slipstream**: tuck in close behind any car at speed (within its wake, up
+to ~7 segments back) and after ~half a second the tow gives +80%
+acceleration and lets you overshoot top speed by 5% — then pull out and
+sling past. Stay tucked too long and you'll rear-end them. This is your
+deliberate passing tool against rivals who match your top speed; rivals
+don't get it.
+
+**Progress bar**: the strip along the bottom maps the whole track —
+checkpoint ticks, gold finish tick at the end, rival dots in their livery
+colors, and your larger gold marker. In time trial it's just you against
+the ticks.
+
+**Pause**: P or gamepad Start freezes everything mid-countdown or mid-race
+(Start no longer skips stages; N remains the debug skip).
+
 ## Race structure
 
 Races start with a 3…2…1…GO countdown — everyone gridded and held, you

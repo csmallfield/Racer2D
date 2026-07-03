@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v11
+# Delivery Manifest — outrun_pseudo3d v12
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -26,7 +26,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v11 adds: title menu (RACE / TIME TRIAL / BEST TIMES / QUIT) over an idle backdrop with menu music; stage picker; time-trial mode (no rivals, no deltas); persistent per-stage per-mode top-10 best times (user://best_times.json) with a browsable board; two new stages (Neon City, Jungle Run) with building/streetlight sprites; Esc-to-menu from any race state.
+v12 adds the arcade-completeness pass: track progress bar (checkpoint ticks, rival livery dots, player marker), pause (P / gamepad Start, new input action; Start removed from next_level), and player slipstream (+80% accel, +5% top-speed overshoot when tucked behind a car — the passing technique vs speed-matched rivals), with a new optional 'slipstream' sound.
+
+Previously: v11 adds: title menu (RACE / TIME TRIAL / BEST TIMES / QUIT) over an idle backdrop with menu music; stage picker; time-trial mode (no rivals, no deltas); persistent per-stage per-mode top-10 best times (user://best_times.json) with a browsable board; two new stages (Neon City, Jungle Run) with building/streetlight sprites; Esc-to-menu from any race state.
 
 Previously: v10 switches deltas to racing convention (+ behind in red, - ahead in green), and raises difficulty again: cruise ladder 0.86-1.0, better rival cornering, 35-segment rival lookahead (fewer traffic bonks), softer bonk penalty, and near-zero leader rubber-banding.
 
