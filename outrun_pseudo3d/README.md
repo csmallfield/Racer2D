@@ -179,6 +179,15 @@ checkpoint ticks, gold finish tick at the end, rival dots in their livery
 colors, and your larger gold marker. In time trial it's just you against
 the ticks.
 
+**Shadows and air**: every car casts a soft 15%-opacity shadow on the road.
+Crest a hill fast enough and the car launches — grounded motion carries the
+terrain's vertical speed, so steeper + faster = bigger air (capped so jumps
+stay readable). Airborne you have almost no steering, no throttle, no
+centrifugal grip — and you sail clean over traffic, scenery, and grass. The
+shadow stays on the road and shrinks with height; the camera absorbs most
+of the jump so the road visibly drops away beneath you. Stage 6 is built
+around this.
+
 **Pause**: P or gamepad Start freezes everything mid-countdown or mid-race
 (Start no longer skips stages; N remains the debug skip).
 

@@ -18,6 +18,7 @@ of import settings.
 | `music_city` | Stage 4 background music. Synthwave — it's a neon city at dusk. |
 | `music_jungle` | Stage 5 background music. Percussive, humid, driving. |
 | `music_menu` | Title menu loop. Sets the tone for the whole game — attract-mode energy. |
+| `music_mountain` | Stage 6 background music. Soaring, wide-open — big-sky driving. |
 
 New stages reference music by name (`music = "music_whatever"` in the level
 script) — add matching files here.
@@ -34,6 +35,7 @@ script) — add matching files here.
 | `countdown_beep` | Short low blip for the 3…2…1 pre-race countdown (plays three times). |
 | `countdown_go` | Higher, punchier "GO!" tone as the race starts. |
 | `checkpoint` | Bright chime when crossing a checkpoint stripe. |
+| `land` | Suspension thud when the car lands after real air time (mountain crests). |
 | `slipstream` | Soft airy whoosh when the slipstream tow reaches full strength (tucked close behind another car at speed). |
 | `stage_clear` | Short victory jingle, 1–3 s, plays once at the finish line. |
 | `game_over` | Descending sting for time-up. |

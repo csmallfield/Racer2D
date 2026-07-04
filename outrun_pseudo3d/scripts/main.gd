@@ -38,6 +38,7 @@ var player_next_cp := 0         # index of the player's next checkpoint
 var player_finish_time := 0.0   # race clock when the player crossed the line
 var _board_title := ""          # frozen at the player's finish
 var _last_beep_second := -1     # last whole second a time_warning beep fired
+var _prev_air := 0.0            # player air last frame (landing detection)
 
 
 func _ready() -> void:
@@ -181,6 +182,28 @@ func _update_progress_bar() -> void:
 	hud.update_progress(player.position_z / track_len, dots)
 
 
+## Ballistic vertical step for an NPC car dict. Grounded motion sets
+## vertical velocity from terrain slope x speed, so hill crests launch cars
+## naturally — the faster, the bigger the air. (Player has the same model
+## inside PlayerCar.update.)
+func _step_air(car: Dictionary, g_prev: float, dt: float) -> void:
+	var g_new := ground_y(float(car.z))
+	car.vy = float(car.vy) - PlayerCar.GRAVITY * dt
+	car.y = float(car.y) + float(car.vy) * dt
+	if float(car.y) <= g_new:
+		car.y = g_new
+		car.vy = minf(maxf(float(car.vy), (g_new - g_prev) / maxf(dt, 0.0001)),
+				PlayerCar.MAX_LAUNCH_VY)
+	car.air = float(car.y) - g_new
+
+
+## Interpolated road altitude (world units) at any track position.
+func ground_y(z: float) -> float:
+	var seg := find_segment(z)
+	var t := fposmod(z, TrackBuilder.SEGMENT_LENGTH) / TrackBuilder.SEGMENT_LENGTH
+	return lerpf(seg.p1.world.y, seg.p2.world.y, t)
+
+
 func _spawn_traffic() -> void:
 	cars.clear()
 	for seg in track.segments:
@@ -194,6 +217,7 @@ func _spawn_traffic() -> void:
 			"offset": lane_offsets.pick_random(),
 			"speed": PlayerCar.MAX_SPEED * randf_range(0.12, 0.5),
 			"sprite": sprite_names.pick_random(),
+			"y": ground_y(z), "vy": 0.0, "air": 0.0,   # vertical state
 		}
 		cars.append(car)
 		find_segment(z).cars.append(car)
@@ -388,6 +412,11 @@ func _run_frame(dt: float) -> void:
 	# Slipstream whoosh as the tow reaches full strength.
 	if player.slip > 0.9:
 		Audio.play("slipstream", -4.0, 1.0, 1.5)
+
+	# Landing thud after real air.
+	if _prev_air > 200.0 and player.air <= 0.5:
+		Audio.play("land", -6.0)
+	_prev_air = player.air
 	_check_collisions()
 	_scroll_background(dt)
 	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED,
@@ -469,7 +498,9 @@ func _update_traffic(dt: float) -> void:
 		car.offset = clampf(
 				float(car.offset) + _car_steer(car, old_seg, player_seg, player_w) * dt * 60.0,
 				-1.2, 1.2)
+		var g_prev := ground_y(float(car.z))
 		car.z = fposmod(car.z + car.speed * dt, track_len)
+		_step_air(car, g_prev, dt)
 		var new_seg := find_segment(car.z)
 		if old_seg.index != new_seg.index:
 			old_seg.cars.erase(car)
@@ -532,6 +563,9 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 	return 0.0
 
 func _check_collisions() -> void:
+	# Airborne cars sail clean over traffic and scenery.
+	if player.air > 250.0:
+		return
 	var seg := find_segment(player.position_z + renderer.player_z())
 	var player_w: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
 
