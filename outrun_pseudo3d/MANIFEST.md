@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v13
+# Delivery Manifest — outrun_pseudo3d v12
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -21,15 +21,12 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/records.gd | ~55 | Records: persistent top-10 times per stage per mode (JSON in user://) |
 | scripts/levels/level_04_city.gd | ~60 | Stage 4: flat street grid, hard corners, heavy traffic, skyline |
 | scripts/levels/level_05_jungle.gd | ~60 | Stage 5: winding hilly dirt road, dense canopy, green haze |
-| scripts/levels/level_06_mountains.gd | ~60 | Stage 6: 2x-extreme hills, ballistic crests, alpine palette |
 | scripts/levels/level_01_coastal.gd | 56 | Stage 1 (reference example): rolling hills, S-curves, palms, daytime palette |
 | scripts/levels/level_02_desert.gd | 53 | Stage 2: harder curves, bigger elevation, more traffic, dusk palette |
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v13 adds car shadows (15% opacity, all cars incl. player), ballistic air over hill crests (terrain-slope launch model shared by player/rivals/traffic, capped launch velocity, camera absorbs 65% of player air, airborne = reduced control + collision flyover), landing sound, and Stage 6 Rocky Mountains with 2x hill presets built around the jumps.
-
-Previously: v12 adds the arcade-completeness pass: track progress bar (checkpoint ticks, rival livery dots, player marker), pause (P / gamepad Start, new input action; Start removed from next_level), and player slipstream (+80% accel, +5% top-speed overshoot when tucked behind a car — the passing technique vs speed-matched rivals), with a new optional 'slipstream' sound.
+v12 adds the arcade-completeness pass: track progress bar (checkpoint ticks, rival livery dots, player marker), pause (P / gamepad Start, new input action; Start removed from next_level), and player slipstream (+80% accel, +5% top-speed overshoot when tucked behind a car — the passing technique vs speed-matched rivals), with a new optional 'slipstream' sound.
 
 Previously: v11 adds: title menu (RACE / TIME TRIAL / BEST TIMES / QUIT) over an idle backdrop with menu music; stage picker; time-trial mode (no rivals, no deltas); persistent per-stage per-mode top-10 best times (user://best_times.json) with a browsable board; two new stages (Neon City, Jungle Run) with building/streetlight sprites; Esc-to-menu from any race state.
 

@@ -75,7 +75,6 @@ func spawn(main: Node2D, count: int) -> void:
 			"dodge_t": 0.0,        # time remaining on the commitment
 			"next_cp": 0,          # index of the next checkpoint to cross
 			"finish_time": -1.0,   # race clock at the finish line, -1 = racing
-			"y": main.ground_y(GRID_GAP * float(i + 1)), "vy": 0.0, "air": 0.0,
 			"was_ahead": true,
 			"finished": false,
 		}
@@ -141,9 +140,7 @@ func update(dt: float, main: Node2D) -> void:
 
 		# --- Advance (z is monotonic race progress; fposmod wraps for
 		# segment lookup and rendering). ---
-		var g_prev: float = main.ground_y(float(r.z))
 		r.z = float(r.z) + float(r.speed) * dt
-		main._step_air(r, g_prev, dt)
 		var new_seg: Dictionary = main.find_segment(float(r.z))
 		if old_seg.index != new_seg.index:
 			old_seg.cars.erase(r)
@@ -155,8 +152,7 @@ func update(dt: float, main: Node2D) -> void:
 		# were never allowed to avoid would be unfair (and invisible).
 		r.bonk_t = maxf(0.0, float(r.bonk_t) - dt)
 		var simulated_range: float = RoadRenderer.DRAW_DISTANCE * TrackBuilder.SEGMENT_LENGTH
-		if float(r.bonk_t) <= 0.0 and absf(gap) < simulated_range \
-				and float(r.air) < 250.0:
+		if float(r.bonk_t) <= 0.0 and absf(gap) < simulated_range:
 			for other in new_seg.cars:
 				if other == r:
 					continue
