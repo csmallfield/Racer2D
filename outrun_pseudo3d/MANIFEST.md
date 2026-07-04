@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v14
+# Delivery Manifest — outrun_pseudo3d v17
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -27,7 +27,11 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v14 fixes: floaty landings over plunging descents (asymmetric gravity — falling pulls 1.7x harder, so the car catches a dropping road quickly while crest pop is unchanged); background parallax direction (was sweeping with the curve instead of against it); and levels without a dedicated/present music track now pick a random existing one at race start.
+v16 fixes the remaining crest float: on climbs the nearest drawn road slice projects up-screen and the near-plane cull left an empty band at the bottom of the frame — the car sat pinned in that band, visibly above the road. A road 'apron' now extrudes the nearest segment's near edge down to the screen bottom, so the road always reaches the car.
+
+Previously: v15 fixes the air-landing bug properly: player vertical physics now samples the ground under the drawn car (position_z + player_z(), ~840 units ahead of the camera) instead of under the camera — landings register exactly when the visible car meets the visible road. The v14 asymmetric-gravity change is reverted (wrong diagnosis; it degraded jump feel without touching the cause).
+
+Previously: v14 fixes: floaty landings over plunging descents (asymmetric gravity — falling pulls 1.7x harder, so the car catches a dropping road quickly while crest pop is unchanged); background parallax direction (was sweeping with the curve instead of against it); and levels without a dedicated/present music track now pick a random existing one at race start.
 
 Previously: v13 adds car shadows (15% opacity, all cars incl. player), ballistic air over hill crests (terrain-slope launch model shared by player/rivals/traffic, capped launch velocity, camera absorbs 65% of player air, airborne = reduced control + collision flyover), landing sound, and Stage 6 Rocky Mountains with 2x hill presets built around the jumps.
 

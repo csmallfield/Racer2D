@@ -116,6 +116,7 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	# Pull the frontmost segment into line as we traverse it, so the curve
 	# keeps its shape while scrolling (codeincomplete's dx trick).
 	var dx: float = -(base.curve * base_percent)
+	var apron_drawn := false
 
 	for n in range(DRAW_DISTANCE):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
@@ -133,6 +134,9 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 				or seg.p2.screen.y >= seg.p1.screen.y:
 			continue
 
+		if not apron_drawn:
+			_draw_apron(seg, w, h, _fog_amount(n), th)
+			apron_drawn = true
 		_draw_segment(seg, w, _fog_amount(n), th)
 		maxy = seg.p2.screen.y
 
@@ -158,7 +162,8 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 			_draw_sprite(spr.name, sc, sx, sy, seg.clip, w, fog_mod)
 
 
-func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> void:
+## Fogged grass/road/rumble colors for a segment (specials included).
+func _road_colors(seg: Dictionary, fog: float, th: Dictionary) -> Dictionary:
 	var light: bool = seg.color == 0
 	var grass: Color = th.grass_light if light else th.grass_dark
 	var road: Color = th.road_light if light else th.road_dark
@@ -173,9 +178,34 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 		road = th.checkpoint if th.has("checkpoint") else th.start
 		rumble = th.checkpoint if th.has("checkpoint") else th.start
 	var fogc: Color = th.fog
-	grass = grass.lerp(fogc, fog)
-	road = road.lerp(fogc, fog)
-	rumble = rumble.lerp(fogc, fog)
+	return {
+		"grass": grass.lerp(fogc, fog),
+		"road": road.lerp(fogc, fog),
+		"rumble": rumble.lerp(fogc, fog),
+	}
+
+
+## The gap between the first drawn slice and the screen bottom (opens up on
+## climbs, where near road projects up-screen) — without this the car sits
+## on a featureless band visibly above the road. Extrudes the nearest
+## segment's near edge straight down to the bottom of the frame.
+func _draw_apron(seg: Dictionary, w: float, h: float, fog: float,
+		th: Dictionary) -> void:
+	var y1: float = seg.p1.screen.y
+	if y1 >= h:
+		return
+	var c := _road_colors(seg, fog, th)
+	draw_rect(Rect2(0, y1, w, h - y1), c.grass)
+	_draw_ribbon(seg.p1.screen.x, h, seg.p1.screen.w,
+			seg.p1.screen.x, y1, seg.p1.screen.w,
+			c.road, c.rumble, false, c.road)
+
+
+func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> void:
+	var c := _road_colors(seg, fog, th)
+	var grass: Color = c.grass
+	var road: Color = c.road
+	var rumble: Color = c.rumble
 
 	var x1: float = seg.p1.screen.x
 	var y1: float = seg.p1.screen.y
@@ -187,8 +217,8 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 	# Grass strip for this slice.
 	draw_rect(Rect2(0, y2, w, y1 - y2), grass)
 
-	var draw_lanes: bool = light and seg.special == ""
-	var lane_col: Color = th.lane.lerp(fogc, fog)
+	var draw_lanes: bool = seg.color == 0 and seg.special == ""
+	var lane_col: Color = th.lane.lerp(th.fog, fog)
 	_draw_ribbon(x1, y1, w1, x2, y2, w2, road, rumble, draw_lanes, lane_col)
 
 

@@ -199,8 +199,7 @@ func _update_progress_bar() -> void:
 ## inside PlayerCar.update.)
 func _step_air(car: Dictionary, g_prev: float, dt: float) -> void:
 	var g_new := ground_y(float(car.z))
-	car.vy = float(car.vy) - PlayerCar.GRAVITY \
-			* (PlayerCar.FALL_MULT if float(car.vy) < 0.0 else 1.0) * dt
+	car.vy = float(car.vy) - PlayerCar.GRAVITY * dt
 	car.y = float(car.y) + float(car.vy) * dt
 	if float(car.y) <= g_new:
 		car.y = g_new
