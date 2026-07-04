@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v18
+# Delivery Manifest — outrun_pseudo3d v21
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -27,7 +27,13 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v18 fixes the crest float for real: the player sprite was pinned to a fixed screen anchor and could never drop relative to the camera. The camera altitude now follows the ground under its own z, and the car is projected at its true world altitude — over a sharp crest it visibly drops low in the frame (briefly toward the bottom edge) until the camera crests, exactly matching the road. Flat framing and airborne rise are numerically identical to before.
+v21 fixes the post-race camera dive: the coast path (stage clear / game over) advanced the car without running its vertical physics, freezing y_pos while the terrain climbed — the aiming camera chased the stale altitude underground. The vertical step is now extracted (PlayerCar.step_vertical) and runs in both the race and coast paths.
+
+Previously: v20 fixes camera aim smoothing: v19 filtered the camera's absolute altitude, which made it trail the terrain on sustained slopes (underground on climbs, high on descents). Terrain-following is now instantaneous; only the aim offset toward the car is smoothed.
+
+Previously: v19 adds camera aim: the camera altitude blends between terrain-following and locking onto the car (CAM_AIM_STRENGTH, default 0.5) with an exponential chase lag (CAM_AIM_DELAY, default 0.2s) — crest dips and jumps still read as motion, then the camera eases after the car. Replaces the fixed 65% air absorption.
+
+Previously: v18 fixes the crest float for real: the player sprite was pinned to a fixed screen anchor and could never drop relative to the camera. The camera altitude now follows the ground under its own z, and the car is projected at its true world altitude — over a sharp crest it visibly drops low in the frame (briefly toward the bottom edge) until the camera crests, exactly matching the road. Flat framing and airborne rise are numerically identical to before.
 
 Previously: v16 fixes the remaining crest float: on climbs the nearest drawn road slice projects up-screen and the near-plane cull left an empty band at the bottom of the frame — the car sat pinned in that band, visibly above the road. A road 'apron' now extrudes the nearest segment's near edge down to the screen bottom, so the road always reaches the car.
 

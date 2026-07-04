@@ -15,6 +15,15 @@ extends Node2D
 const ROAD_WIDTH := 2000.0     # half-width of the road in world units
 const CAMERA_HEIGHT := 1000.0  # camera height above the road
 const AESTHETIC_LIFT := 0.08   # keeps the classic car framing above the bottom edge
+
+# Camera aim: how strongly the camera's altitude tracks the car itself
+# rather than the ground under the camera. 0 = fully terrain-following
+# (car moves freely in frame), 1 = rigidly locked to the car (car pinned
+# to its anchor). The delay is the chase lag — an exponential smoothing
+# time constant in seconds, so crest dips and jumps still read as motion
+# before the camera eases after them.
+const CAM_AIM_STRENGTH := 0.5
+const CAM_AIM_DELAY := 0.2
 const FOV_DEG := 100.0
 const DRAW_DISTANCE := 300     # segments drawn ahead of the camera
 const FOG_DENSITY := 5.0
@@ -23,8 +32,8 @@ const LANES := 3
 var main: Node2D                 # set by main.gd
 var camera_depth: float = 1.0 / tan(deg_to_rad(FOV_DEG * 0.5))
 var hill_offset := 0.0           # background parallax scroll (driven by main)
-var last_player_y := 0.0         # road altitude under the camera this frame
-var last_cam_y := 0.0            # full camera altitude (for projecting the player)
+var last_cam_y := 0.0            # camera altitude this frame (projects the player)
+var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
 
 
 ## Distance from camera to the player car along z.
@@ -102,15 +111,18 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	var base: Dictionary = main.find_segment(player.position_z)
 	var base_percent := fposmod(player.position_z, seg_len) / seg_len
 
-	# Camera altitude follows the ground under the CAMERA's own z. (The car
-	# sprite sits player_z() ahead and is projected at its true world
-	# altitude in _draw_player — over a sharp crest it visibly drops
-	# relative to the camera, briefly toward the bottom of the frame,
-	# instead of being pinned to a fixed anchor above the near road face.)
-	# The camera still absorbs 65% of the player's air on jumps.
-	last_player_y = lerpf(base.p1.world.y, base.p2.world.y, base_percent) \
-			+ player.air * 0.65
-	var cam_y := last_player_y + CAMERA_HEIGHT
+	# Camera altitude: terrain-following is INSTANT (smoothing the absolute
+	# altitude makes the camera trail the ground on every sustained slope —
+	# underground on climbs, sky-high on descents). Only the aim component,
+	# the deviation toward the car's altitude, is smoothed with the chase
+	# lag. The car sprite is projected at its true world altitude.
+	var free_alt: float = lerpf(base.p1.world.y, base.p2.world.y, base_percent) \
+			+ CAMERA_HEIGHT
+	var locked_alt: float = player.y_pos + CAMERA_HEIGHT
+	var offset_target := (locked_alt - free_alt) * CAM_AIM_STRENGTH
+	_aim_offset = lerpf(_aim_offset, offset_target,
+			1.0 - exp(-get_process_delta_time() / CAM_AIM_DELAY))
+	var cam_y := free_alt + _aim_offset
 	last_cam_y = cam_y
 
 	# --- Pass 1: road polygons, front to back, tracking the clip line. ---
@@ -329,3 +341,8 @@ func _draw_player(w: float, h: float) -> void:
 	draw_set_transform(Vector2(cx, cy), tilt, Vector2.ONE)
 	draw_texture_rect(def.texture, Rect2(-dw * 0.5, -dh * 0.5, dw, dh), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Snap the camera on the next frame (level loads, restarts).
+func reset_camera() -> void:
+	_aim_offset = 0.0

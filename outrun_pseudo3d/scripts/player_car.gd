@@ -100,27 +100,34 @@ func update(dt: float, main: Node) -> bool:
 		speed = move_toward(speed, slip_max, MAX_SPEED * 0.6 * dt)
 
 	var track_len: float = main.track.track_length()
-	# Vertical physics reference: the ground under the DRAWN car, which sits
-	# player_z() ahead of position_z (the camera). Sampling at position_z
-	# made the car land on ground ~840 units behind what the eye sees —
-	# registering touchdown early and hovering above sharp crests.
-	var sprite_offset: float = main.renderer.player_z()
-	var g_prev: float = main.ground_y(position_z + sprite_offset)
+	var g_prev := _sprite_ground(main)
 	var new_z := position_z + speed * dt
 	var crossed_finish := new_z >= track_len
 	position_z = fposmod(new_z, track_len)
+	step_vertical(dt, main, g_prev)
+	return crossed_finish
 
-	# Vertical: ballistic with terrain contact. Grounded motion sets vy from
-	# slope x speed, so a crest taken at pace launches the car naturally.
-	var g_new: float = main.ground_y(position_z + sprite_offset)
+
+## Ground under the DRAWN car — it sits player_z() ahead of position_z (the
+## camera). Sampling at position_z made the car land on ground ~840 units
+## behind what the eye sees.
+func _sprite_ground(main: Node) -> float:
+	return main.ground_y(position_z + main.renderer.player_z())
+
+
+## Vertical: ballistic with terrain contact. Grounded motion sets vy from
+## slope x speed, so a crest taken at pace launches the car naturally.
+## Call with the sprite ground captured BEFORE advancing position_z.
+## Runs every frame the car moves — including post-race coasting, or the
+## frozen altitude drags the aiming camera into the terrain.
+func step_vertical(dt: float, main: Node, g_prev: float) -> void:
+	var g_new := _sprite_ground(main)
 	vy -= GRAVITY * dt
 	y_pos += vy * dt
 	if y_pos <= g_new:
 		y_pos = g_new
 		vy = minf(maxf(vy, (g_new - g_prev) / maxf(dt, 0.0001)), MAX_LAUNCH_VY)
 	air = y_pos - g_new
-
-	return crossed_finish
 
 
 func speed_kmh() -> int:

@@ -95,6 +95,7 @@ func _load_level(idx: int) -> void:
 	level.build(track)
 	track.finalize()
 
+	renderer.reset_camera()
 	cp_zs = track.mark_checkpoints(level.checkpoint_count)
 	section_time = level.time_limit / float(level.checkpoint_count + 1)
 	player_next_cp = 0
@@ -485,7 +486,9 @@ func _run_frame(dt: float) -> void:
 ## Keeps the world moving (with input disabled) during clear/game-over states.
 func _coast_frame(dt: float, target_speed: float) -> void:
 	player.speed = move_toward(player.speed, target_speed, PlayerCar.MAX_SPEED * 0.5 * dt)
+	var g_prev := player._sprite_ground(self)
 	player.position_z = fposmod(player.position_z + player.speed * dt, track.track_length())
+	player.step_vertical(dt, self, g_prev)
 	player.steer_dir = 0.0
 	player.bounce = 0.0
 	player.x = move_toward(player.x, 0.0, dt * 1.5)
