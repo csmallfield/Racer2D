@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v17
+# Delivery Manifest — outrun_pseudo3d v18
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -27,7 +27,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v16 fixes the remaining crest float: on climbs the nearest drawn road slice projects up-screen and the near-plane cull left an empty band at the bottom of the frame — the car sat pinned in that band, visibly above the road. A road 'apron' now extrudes the nearest segment's near edge down to the screen bottom, so the road always reaches the car.
+v18 fixes the crest float for real: the player sprite was pinned to a fixed screen anchor and could never drop relative to the camera. The camera altitude now follows the ground under its own z, and the car is projected at its true world altitude — over a sharp crest it visibly drops low in the frame (briefly toward the bottom edge) until the camera crests, exactly matching the road. Flat framing and airborne rise are numerically identical to before.
+
+Previously: v16 fixes the remaining crest float: on climbs the nearest drawn road slice projects up-screen and the near-plane cull left an empty band at the bottom of the frame — the car sat pinned in that band, visibly above the road. A road 'apron' now extrudes the nearest segment's near edge down to the screen bottom, so the road always reaches the car.
 
 Previously: v15 fixes the air-landing bug properly: player vertical physics now samples the ground under the drawn car (position_z + player_z(), ~840 units ahead of the camera) instead of under the camera — landings register exactly when the visible car meets the visible road. The v14 asymmetric-gravity change is reverted (wrong diagnosis; it degraded jump feel without touching the cause).
 

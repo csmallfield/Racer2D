@@ -14,6 +14,7 @@ extends Node2D
 
 const ROAD_WIDTH := 2000.0     # half-width of the road in world units
 const CAMERA_HEIGHT := 1000.0  # camera height above the road
+const AESTHETIC_LIFT := 0.08   # keeps the classic car framing above the bottom edge
 const FOV_DEG := 100.0
 const DRAW_DISTANCE := 300     # segments drawn ahead of the camera
 const FOG_DENSITY := 5.0
@@ -22,7 +23,8 @@ const LANES := 3
 var main: Node2D                 # set by main.gd
 var camera_depth: float = 1.0 / tan(deg_to_rad(FOV_DEG * 0.5))
 var hill_offset := 0.0           # background parallax scroll (driven by main)
-var last_player_y := 0.0         # road altitude under the player this frame
+var last_player_y := 0.0         # road altitude under the camera this frame
+var last_cam_y := 0.0            # full camera altitude (for projecting the player)
 
 
 ## Distance from camera to the player car along z.
@@ -97,18 +99,19 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	var player: PlayerCar = main.player
 	var th: Dictionary = main.level.theme
 
-	# Camera altitude follows the road under the player (interpolated).
-	var ahead := fposmod(player.position_z + player_z(), track_len)
-	var pseg: Dictionary = main.find_segment(ahead)
-	var ppercent := fposmod(ahead, seg_len) / seg_len
-	# Camera absorbs most of the player's air so big jumps stay on screen:
-	# the car rises by the remainder while the road drops away beneath it.
-	last_player_y = lerpf(pseg.p1.world.y, pseg.p2.world.y, ppercent) \
-			+ player.air * 0.65
-	var cam_y := last_player_y + CAMERA_HEIGHT
-
 	var base: Dictionary = main.find_segment(player.position_z)
 	var base_percent := fposmod(player.position_z, seg_len) / seg_len
+
+	# Camera altitude follows the ground under the CAMERA's own z. (The car
+	# sprite sits player_z() ahead and is projected at its true world
+	# altitude in _draw_player — over a sharp crest it visibly drops
+	# relative to the camera, briefly toward the bottom of the frame,
+	# instead of being pinned to a fixed anchor above the near road face.)
+	# The camera still absorbs 65% of the player's air on jumps.
+	last_player_y = lerpf(base.p1.world.y, base.p2.world.y, base_percent) \
+			+ player.air * 0.65
+	var cam_y := last_player_y + CAMERA_HEIGHT
+	last_cam_y = cam_y
 
 	# --- Pass 1: road polygons, front to back, tracking the clip line. ---
 	var maxy := h
@@ -305,17 +308,23 @@ func _draw_player(w: float, h: float) -> void:
 	var dw: float = def.world_w * sc * w * 0.5
 	var dh: float = def.world_h * sc * w * 0.5
 	var cx := w * 0.5
-	# The camera follows 65% of the air; the car visibly rises by 35% and
-	# the shadow slides down toward the receding road, shrinking as it goes.
+	# True projection of the car's world altitude against the camera. On
+	# flat ground this lands exactly on the classic 0.92h anchor (the
+	# AESTHETIC_LIFT keeps that framing); over a crest, where the camera is
+	# still behind on higher ground, the car correctly drops low in the
+	# frame — briefly toward the bottom edge — until the camera follows.
+	var ground_world: float = player.y_pos - player.air
+	var car_bottom := h * 0.5 + (last_cam_y - player.y_pos) * sc * h * 0.5 \
+			- AESTHETIC_LIFT * h
+	var shadow_y := h * 0.5 + (last_cam_y - ground_world) * sc * h * 0.5 \
+			- AESTHETIC_LIFT * h
 	var air_px: float = player.air * sc * h * 0.5
-	var rise := minf(air_px * 0.35, h * 0.3)
-	var shadow_y := h * 0.92 + air_px * 0.65
-	if shadow_y < h:
+	if shadow_y < h + 20.0:
 		var shrink := clampf(1.0 - air_px / 120.0, 0.55, 1.0)
 		draw_set_transform(Vector2(cx, shadow_y), 0.0, Vector2(1.0, 0.28))
 		draw_circle(Vector2.ZERO, dw * 0.46 * shrink, Color(0, 0, 0, 0.15))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var cy := h * 0.92 - dh * 0.5 + player.bounce - rise
+	var cy := car_bottom - dh * 0.5 + player.bounce
 	var tilt: float = 0.06 * player.steer_dir * (player.speed / PlayerCar.MAX_SPEED)
 	draw_set_transform(Vector2(cx, cy), tilt, Vector2.ONE)
 	draw_texture_rect(def.texture, Rect2(-dw * 0.5, -dh * 0.5, dw, dh), false)
