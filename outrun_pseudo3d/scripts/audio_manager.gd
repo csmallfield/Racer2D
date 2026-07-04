@@ -94,6 +94,11 @@ func play_music(music_name: String) -> void:
 	_music_player.play()
 
 
+## True if a stream exists on disk for this sound name.
+func has_sound(sound_name: String) -> bool:
+	return _find_stream(sound_name) != null
+
+
 func stop_music() -> void:
 	_music_name = ""
 	_music_player.stop()

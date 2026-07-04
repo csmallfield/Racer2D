@@ -12,6 +12,7 @@ const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "QUIT"]
 
 var level_paths: Array = []
 var level_names: Array = []     # display names, parallel to level_paths
+var level_musics: Array = []    # every music name levels declare (fallback pool)
 var level_index := 0
 var level: TrackLevel
 var track: TrackBuilder
@@ -72,10 +73,13 @@ func _discover_levels() -> void:
 					level_paths.append(path)
 	level_paths.sort()
 	level_names.clear()
+	level_musics.clear()
 	for path in level_paths:
 		var script: GDScript = load(path)
 		var inst: TrackLevel = script.new()
 		level_names.append(inst.level_name)
+		if not inst.music.is_empty() and not level_musics.has(inst.music):
+			level_musics.append(inst.music)
 	if level_paths.is_empty():
 		push_error("No levels found in %s" % LEVELS_DIR)
 
@@ -123,7 +127,14 @@ func _start_race(idx: int) -> void:
 	state = State.COUNTDOWN
 	countdown_t = 3.0
 	_last_count = -1
-	Audio.play_music(level.music)
+	# Levels without a dedicated (and present) track get a random existing one.
+	var music_name := level.music
+	if music_name.is_empty() or not Audio.has_sound(music_name):
+		var available: Array = level_musics.filter(
+				func(m): return Audio.has_sound(String(m)))
+		if not available.is_empty():
+			music_name = available.pick_random()
+	Audio.play_music(music_name)
 
 
 func _enter_menu() -> void:
@@ -188,7 +199,8 @@ func _update_progress_bar() -> void:
 ## inside PlayerCar.update.)
 func _step_air(car: Dictionary, g_prev: float, dt: float) -> void:
 	var g_new := ground_y(float(car.z))
-	car.vy = float(car.vy) - PlayerCar.GRAVITY * dt
+	car.vy = float(car.vy) - PlayerCar.GRAVITY \
+			* (PlayerCar.FALL_MULT if float(car.vy) < 0.0 else 1.0) * dt
 	car.y = float(car.y) + float(car.vy) * dt
 	if float(car.y) <= g_new:
 		car.y = g_new
@@ -486,7 +498,9 @@ func _coast_frame(dt: float, target_speed: float) -> void:
 
 func _scroll_background(dt: float) -> void:
 	var seg := find_segment(player.position_z)
-	renderer.hill_offset -= seg.curve * (player.speed / PlayerCar.MAX_SPEED) * dt * 120.0
+	# In a right-hand curve the world rotates left past you, so the far
+	# hills sweep left: offset increases (sampled as x + offset).
+	renderer.hill_offset += seg.curve * (player.speed / PlayerCar.MAX_SPEED) * dt * 120.0
 
 
 func _update_traffic(dt: float) -> void:

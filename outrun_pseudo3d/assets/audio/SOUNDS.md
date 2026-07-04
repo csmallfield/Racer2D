@@ -21,7 +21,8 @@ of import settings.
 | `music_mountain` | Stage 6 background music. Soaring, wide-open — big-sky driving. |
 
 New stages reference music by name (`music = "music_whatever"` in the level
-script) — add matching files here.
+script) — add matching files here. Stages whose named track is missing (or
+who name none) pick a random existing stage track at each race start.
 
 ## One-shots
 

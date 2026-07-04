@@ -14,6 +14,8 @@ const CENTRIFUGAL := 0.3                   # how hard curves push you outward
 const GRAVITY := 22000.0                   # vertical fall, world units/s^2
 const AIR_THRESHOLD := 10.0                # above this height you're airborne
 const MAX_LAUNCH_VY := 5000.0              # caps crest launches (keeps air readable)
+const FALL_MULT := 1.7                     # falling gravity multiplier — catches
+                                           # plunging roads fast, kills float
 const AIR_CONTROL := 0.2                   # steering authority in the air
 
 # Slipstream: tuck in close behind another car at speed and drag drops —
@@ -108,7 +110,7 @@ func update(dt: float, main: Node) -> bool:
 	# Vertical: ballistic with terrain contact. Grounded motion sets vy from
 	# slope x speed, so a crest taken at pace launches the car naturally.
 	var g_new: float = main.ground_y(position_z)
-	vy -= GRAVITY * dt
+	vy -= GRAVITY * (FALL_MULT if vy < 0.0 else 1.0) * dt
 	y_pos += vy * dt
 	if y_pos <= g_new:
 		y_pos = g_new
