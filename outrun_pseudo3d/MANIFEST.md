@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v3
+# Delivery Manifest — outrun_pseudo3d v13
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -15,9 +15,30 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/track_builder.gd | 160 | Level authoring API: add_road/add_curve/add_hill/add_s_curves/scenery, easing, start/finish marking |
 | scripts/track_level.gd | 39 | Base class all levels extend: name, time limit, traffic count, color theme, build() contract |
 | scripts/sprite_catalog.gd | 173 | Placeholder art registry — runtime-generated textures; single swap point for real art later |
-| scripts/hud.gd | 56 | HUD: speed, countdown timer, stage name, center message, control hints |
+| scripts/hud.gd | ~95 | HUD: speed, timer, stage name, center message, race position, overtake flashes |
+| scripts/rivals.gd | ~180 | RivalManager: Road Rash-style opponent AI, ranking, overtake events |
+| scripts/menu.gd | ~110 | MenuLayer: title menu, stage picker, best-times board (visual only) |
+| scripts/records.gd | ~55 | Records: persistent top-10 times per stage per mode (JSON in user://) |
+| scripts/levels/level_04_city.gd | ~60 | Stage 4: flat street grid, hard corners, heavy traffic, skyline |
+| scripts/levels/level_05_jungle.gd | ~60 | Stage 5: winding hilly dirt road, dense canopy, green haze |
+| scripts/levels/level_06_mountains.gd | ~60 | Stage 6: 2x-extreme hills, ballistic crests, alpine palette |
 | scripts/levels/level_01_coastal.gd | 56 | Stage 1 (reference example): rolling hills, S-curves, palms, daytime palette |
 | scripts/levels/level_02_desert.gd | 53 | Stage 2: harder curves, bigger elevation, more traffic, dusk palette |
+| scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
+
+v13 adds car shadows (15% opacity, all cars incl. player), ballistic air over hill crests (terrain-slope launch model shared by player/rivals/traffic, capped launch velocity, camera absorbs 65% of player air, airborne = reduced control + collision flyover), landing sound, and Stage 6 Rocky Mountains with 2x hill presets built around the jumps.
+
+Previously: v12 adds the arcade-completeness pass: track progress bar (checkpoint ticks, rival livery dots, player marker), pause (P / gamepad Start, new input action; Start removed from next_level), and player slipstream (+80% accel, +5% top-speed overshoot when tucked behind a car — the passing technique vs speed-matched rivals), with a new optional 'slipstream' sound.
+
+Previously: v11 adds: title menu (RACE / TIME TRIAL / BEST TIMES / QUIT) over an idle backdrop with menu music; stage picker; time-trial mode (no rivals, no deltas); persistent per-stage per-mode top-10 best times (user://best_times.json) with a browsable board; two new stages (Neon City, Jungle Run) with building/streetlight sprites; Esc-to-menu from any race state.
+
+Previously: v10 switches deltas to racing convention (+ behind in red, - ahead in green), and raises difficulty again: cruise ladder 0.86-1.0, better rival cornering, 35-segment rival lookahead (fewer traffic bonks), softer bonk penalty, and near-zero leader rubber-banding.
+
+Previously: v9 fixes checkpoint deltas (sign convention: + ahead / - behind, tenths precision, projected lead when first through), makes the leaderboard live (no projections; racers fill in as they finish), and raises difficulty (faster cruise ladder 0.84-0.99, better rival cornering, weaker rubber-banding).
+
+Previously: v7 fixes the finish-rank bug (rank now derives from finish times, not wrapped progress) and rival dodge jitter (committed dodges with hysteresis), and adds: 3-2-1-GO countdown, checkpoint sections with timer extension and leader time deltas, an overall race clock, and an end-of-race leaderboard.
+
+Previously: v6 removes the fork system entirely and adds Road Rash-style AI opponents: a 9-rival named roster with personality speeds, curve braking, apex hugging, rubber-banding, and traffic avoidance, plus live position ranking in the HUD ("3rd / 10"), nearby-overtake flashes, and finish position on stage clear.
 
 New levels: drop a .gd extending TrackLevel into scripts/levels/ — auto-discovered, played in filename order.

@@ -14,6 +14,11 @@ of import settings.
 | `offroad_loop` | Gravel/grass rumble, ~1 s seamless loop. Plays only while driving on the grass. |
 | `music_coastal` | Stage 1 background music, loops for the whole stage. Upbeat synth/FM in the OutRun idiom fits the palette. |
 | `music_desert` | Stage 2 background music. Duskier/driving mood. |
+| `music_night` | Stage 3 background music. Nocturnal, moodier. |
+| `music_city` | Stage 4 background music. Synthwave — it's a neon city at dusk. |
+| `music_jungle` | Stage 5 background music. Percussive, humid, driving. |
+| `music_menu` | Title menu loop. Sets the tone for the whole game — attract-mode energy. |
+| `music_mountain` | Stage 6 background music. Soaring, wide-open — big-sky driving. |
 
 New stages reference music by name (`music = "music_whatever"` in the level
 script) — add matching files here.
@@ -25,6 +30,13 @@ script) — add matching files here.
 | `skid` | Tire screech, 0.5–1 s. Fires when steering hard above ~85% top speed (0.9 s cooldown). |
 | `crash` | Heavy impact with roadside scenery (tree/rock/sign). Big, punchy, short. |
 | `bump` | Softer thud for rear-ending traffic. Clearly lighter than `crash`. |
+| `menu_move` | Tiny tick when moving the menu selection. Very short, unobtrusive. |
+| `menu_select` | Confirm blip when choosing a menu item. Slightly bigger than `menu_move`. |
+| `countdown_beep` | Short low blip for the 3…2…1 pre-race countdown (plays three times). |
+| `countdown_go` | Higher, punchier "GO!" tone as the race starts. |
+| `checkpoint` | Bright chime when crossing a checkpoint stripe. |
+| `land` | Suspension thud when the car lands after real air time (mountain crests). |
+| `slipstream` | Soft airy whoosh when the slipstream tow reaches full strength (tucked close behind another car at speed). |
 | `stage_clear` | Short victory jingle, 1–3 s, plays once at the finish line. |
 | `game_over` | Descending sting for time-up. |
 | `time_warning` | Single short beep. Fires once per second during the last 10 seconds, so keep it under ~0.4 s and not annoying at 10 repetitions. |

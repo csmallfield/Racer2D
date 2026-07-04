@@ -149,6 +149,66 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Menu, modes, and best times
+
+The game boots to a title menu (over an idle stage backdrop): **RACE**
+(you versus the rival pack), **TIME TRIAL** (no rivals — you, the traffic,
+and the clock), **BEST TIMES**, and QUIT. Menus navigate with arrows /
+d-pad and confirm with Enter / Space / gamepad A; Esc backs out, including
+from a running race.
+
+Both modes go through a stage picker. Finishing any stage records your time
+to a persistent per-stage, per-mode top-10 (saved as JSON in `user://`),
+browsable from BEST TIMES (steer to flip through stages). Race finishes show
+the race results board (with "BEST #n" in the title when you set one); time
+trial finishes show the stage's all-time top 10 with your run highlighted.
+In time trial the checkpoint flash has no delta — there's nobody to be
+behind.
+
+## Driving techniques and race HUD
+
+**Slipstream**: tuck in close behind any car at speed (within its wake, up
+to ~7 segments back) and after ~half a second the tow gives +80%
+acceleration and lets you overshoot top speed by 5% — then pull out and
+sling past. Stay tucked too long and you'll rear-end them. This is your
+deliberate passing tool against rivals who match your top speed; rivals
+don't get it.
+
+**Progress bar**: the strip along the bottom maps the whole track —
+checkpoint ticks, gold finish tick at the end, rival dots in their livery
+colors, and your larger gold marker. In time trial it's just you against
+the ticks.
+
+**Shadows and air**: every car casts a soft 15%-opacity shadow on the road.
+Crest a hill fast enough and the car launches — grounded motion carries the
+terrain's vertical speed, so steeper + faster = bigger air (capped so jumps
+stay readable). Airborne you have almost no steering, no throttle, no
+centrifugal grip — and you sail clean over traffic, scenery, and grass. The
+shadow stays on the road and shrinks with height; the camera absorbs most
+of the jump so the road visibly drops away beneath you. Stage 6 is built
+around this.
+
+**Pause**: P or gamepad Start freezes everything mid-countdown or mid-race
+(Start no longer skips stages; N remains the debug skip).
+
+## Race structure
+
+Races start with a 3…2…1…GO countdown — everyone gridded and held, you
+last. The overall race clock (counting up, top center) starts on GO.
+
+Checkpoint stripes divide each stage into equal sections (`checkpoint_count`
+per level, default 2); the countdown timer is per-section, and crossing a
+checkpoint adds the section allotment on top of whatever you had left,
+OutRun style. Each crossing flashes your racing-standard
+time delta against the fastest rival through that checkpoint — "+" behind
+(red), "-" ahead (green), with tenths. If you're first there, it shows your
+cushion over the best chaser ("-0:02.3 (LEADER)", green).
+
+Finishing brings up the results board: finished racers with real times,
+still-racing rivals below in live running order (dimmed, times filling in
+as they cross — the race clock keeps running behind the board). Your row is
+highlighted. Press accelerate to continue to the next stage.
+
 ## Traffic AI
 
 NPC cars scan up to 20 segments ahead and swerve around slower cars and the
@@ -156,9 +216,31 @@ player (steering harder the closer the obstacle), then drift back toward the
 road if they've wandered wide — a port of codeincomplete's `updateCarOffset`.
 Cars outside the drawn window skip AI entirely.
 
+## AI opponents
+
+Nine named rivals (VIPER, NATASHA, BIFF, ...) race the same start-to-finish
+run — Road Rash's pack model, minus the combat. You grid up last and race
+through them; the HUD shows your live position bottom-right ("3rd / 10"),
+nearby overtakes flash on screen, and the stage-clear message reports where
+you finished.
+
+What makes them beatable: each rival has a personality cruise speed (the
+roster is a ladder from easy prey to genuinely fast), and they all brake for
+curves proportionally to severity — holding your nerve through corners is
+where you gain. Mild rubber-banding keeps the pack alive without feeling
+rigged. They swerve around traffic, each other, and you; a failed dodge into
+slow traffic costs them half their speed.
+
+Rivals share the traffic infrastructure (same per-segment car lists), so
+rendering, avoidance, and collisions need no special cases. Tuning constants
+live at the top of `scripts/rivals.gd`; per-level pack size via
+`rival_count` in the level script.
+
 ## Known limitations / obvious next steps
 
-- Single road ribbon — OutRun's forks/wide freeway use a second overlapped
+- Rivals never crash out entirely or vary behavior per lap — no rivalry
+  memory, no aggression personalities beyond speed. Easy extensions in
+  `rivals.gd` if the racing needs more texture. — OutRun's forks/wide freeway use a second overlapped
   road, which this architecture supports but doesn't implement.
 - If you later want thousands of draw calls (dense scenery), move sprite
   drawing from `_draw()` to a `MultiMesh` or `RenderingServer` batching pass.

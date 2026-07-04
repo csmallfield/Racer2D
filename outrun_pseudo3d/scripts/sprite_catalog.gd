@@ -44,6 +44,31 @@ static func _build_all() -> void:
 		"texture": _make_car(Color(0.15, 0.6, 0.3)),
 		"world_w": 500.0, "world_h": 290.0, "collidable": true,
 	}
+	# Rival racers: a distinct saturated palette with a roof stripe so they
+	# read as competitors, not traffic. Indexed to match RivalManager.NAMES.
+	var rival_colors: Array[Color] = [
+		Color(0.95, 0.35, 0.05), Color(0.85, 0.1, 0.55), Color(0.1, 0.75, 0.8),
+		Color(0.55, 0.85, 0.1), Color(0.95, 0.9, 0.9), Color(0.55, 0.2, 0.9),
+		Color(0.1, 0.55, 0.4), Color(0.95, 0.8, 0.1), Color(0.35, 0.4, 0.95),
+	]
+	for i in range(rival_colors.size()):
+		_cache["rival_%d" % i] = {
+			"texture": _make_rival(rival_colors[i]),
+			"world_w": 510.0, "world_h": 295.0, "collidable": true,
+			"map_color": rival_colors[i],   # progress-bar dot color
+		}
+	_cache["building"] = {
+		"texture": _make_building(Color(0.16, 0.17, 0.24), Color(0.95, 0.85, 0.4)),
+		"world_w": 2200.0, "world_h": 5200.0, "collidable": true,
+	}
+	_cache["building_2"] = {
+		"texture": _make_building(Color(0.2, 0.14, 0.22), Color(0.4, 0.85, 0.95)),
+		"world_w": 1800.0, "world_h": 3800.0, "collidable": true,
+	}
+	_cache["streetlight"] = {
+		"texture": _make_streetlight(),
+		"world_w": 260.0, "world_h": 1500.0, "collidable": false,
+	}
 	_cache["tree"] = {
 		"texture": _make_tree(Color(0.09, 0.42, 0.16), Color(0.35, 0.22, 0.1)),
 		"world_w": 1300.0, "world_h": 2300.0, "collidable": true,
@@ -116,6 +141,37 @@ static func _make_car(body: Color) -> ImageTexture:
 	# tail lights
 	img.fill_rect(Rect2i(4, 30, 8, 6), Color(1.0, 0.2, 0.1))
 	img.fill_rect(Rect2i(84, 30, 8, 6), Color(1.0, 0.2, 0.1))
+	return _to_texture(img)
+
+
+## A rival car: the standard car body plus a white racing stripe.
+static func _make_rival(body: Color) -> ImageTexture:
+	var tex := _make_car(body)
+	var img := tex.get_image()
+	img.fill_rect(Rect2i(42, 6, 12, 44), Color(0.97, 0.97, 0.97))
+	return _to_texture(img)
+
+
+## Tower block with a lit-window grid — city skyline placeholder.
+static func _make_building(body: Color, window: Color) -> ImageTexture:
+	var img := _new_image(64, 128)
+	img.fill_rect(Rect2i(2, 2, 60, 124), body)
+	for row in range(6, 120, 10):
+		for col in range(8, 54, 12):
+			if randf() < 0.72:
+				img.fill_rect(Rect2i(col, row, 7, 6), window)
+			else:
+				img.fill_rect(Rect2i(col, row, 7, 6), body.darkened(0.35))
+	return _to_texture(img)
+
+
+## Roadside street light: pole with an arm and a warm lamp head.
+static func _make_streetlight() -> ImageTexture:
+	var img := _new_image(48, 96)
+	var pole := Color(0.4, 0.42, 0.48)
+	img.fill_rect(Rect2i(6, 8, 5, 88), pole)
+	img.fill_rect(Rect2i(6, 8, 34, 4), pole)
+	img.fill_rect(Rect2i(34, 12, 10, 6), Color(1.0, 0.92, 0.6))
 	return _to_texture(img)
 
 

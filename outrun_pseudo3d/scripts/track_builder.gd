@@ -149,6 +149,20 @@ func add_scenery(sprite_name: String, start_index: int, end_index: int, step: in
 		i += step
 
 
+## Paint checkpoint stripes across the road at `count` evenly spaced points
+## and return their z positions (used for timer extensions and time deltas).
+## Call after finalize().
+func mark_checkpoints(count: int) -> Array[float]:
+	var zs: Array[float] = []
+	for k in range(1, count + 1):
+		var idx := int(float(segments.size()) * float(k) / float(count + 1))
+		zs.append(float(idx) * SEGMENT_LENGTH)
+		for i in range(idx, mini(idx + RUMBLE_LENGTH * 2, segments.size())):
+			if segments[i].special == "":
+				segments[i].special = "checkpoint"
+	return zs
+
+
 ## Call after build() to mark start/finish stripes.
 func finalize() -> void:
 	if segments.size() < 20:
