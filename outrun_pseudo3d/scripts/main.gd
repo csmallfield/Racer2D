@@ -1,62 +1,147 @@
 extends Node2D
 ## Game orchestrator: discovers levels, builds tracks, runs the game loop
-## (player update, traffic, collisions, timer, stage progression).
+## for 1-4 local players across split-screen viewports. Each player is
+## mirrored as a world car entity in the segment lists, which gives
+## player-vs-player collisions, mutual slipstream, and AI avoidance of
+## every player through the same code paths as traffic and rivals.
 
 const LEVELS_DIR := "res://scripts/levels"
 const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
+const MP_FINISH_GRACE := 20.0   # after the first finish, others get this long
+const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 
-enum State { MENU, LEVEL_SELECT, LEADERBOARD, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+enum State { MENU, PLAYER_SELECT, LEVEL_SELECT, LEADERBOARD, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 enum Mode { RACE, TIME_TRIAL }
 
 const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "QUIT"]
+const PLAYER_ITEMS: Array[String] = ["1 PLAYER", "2 PLAYERS", "4 PLAYERS"]
+const PLAYER_COUNTS: Array[int] = [1, 2, 4]
 
 var level_paths: Array = []
-var level_names: Array = []     # display names, parallel to level_paths
-var level_musics: Array = []    # every music name levels declare (fallback pool)
+var level_names: Array = []
+var level_musics: Array = []
 var level_index := 0
 var level: TrackLevel
 var track: TrackBuilder
-var player: PlayerCar
 var cars: Array = []
 var rivals: RivalManager
 
-var renderer: RoadRenderer
-var hud: HudLayer
+# --- Players and views ---
+var player_count := 1
+var players: Array[PlayerCar] = []
+var views: Array = []           # [{container, viewport, renderer, hud}]
+var mirrors: Array = []         # per-player world car entities in seg.cars
+var next_cp: Array[int] = []
+var finished: Array[bool] = []
+var finish_time: Array[float] = []
+var finish_order: Array[int] = []   # order index at the line, -1 = racing
+var _prev_air: Array[float] = []
+var _prev_boosting: Array[bool] = []
+var _finishers := 0
+var _finish_deadline := -1.0
 
 var state: State = State.MENU
 var mode: Mode = Mode.RACE
 var menu: MenuLayer
-var menu_sel := 0               # highlighted row in the current menu view
-var select_sel := 0             # highlighted stage in level select / board
-var paused_from: State = State.RUNNING   # state to resume into after pause
+var menu_sel := 0
+var select_sel := 0
+var paused_from: State = State.RUNNING
 var time_left := 0.0
-var countdown_t := 0.0          # 3..0 pre-race countdown
-var _last_count := -1           # last whole second announced in the countdown
-var race_time := 0.0            # overall race clock, counts up while RUNNING
-var section_time := 0.0         # timer grant per checkpoint section
-var cp_zs: Array[float] = []    # checkpoint z positions on the track
-var player_next_cp := 0         # index of the player's next checkpoint
-var player_finish_time := 0.0   # race clock when the player crossed the line
-var _board_title := ""          # frozen at the player's finish
-var _last_beep_second := -1     # last whole second a time_warning beep fired
-var _prev_air := 0.0            # player air last frame (landing detection)
-var _prev_boosting := false     # boost rising-edge detection (shake + sound)
-var pickups: Array = []         # all boost canisters on the current track
+var countdown_t := 0.0
+var _last_count := -1
+var race_time := 0.0
+var section_time := 0.0
+var cp_zs: Array[float] = []
+var _board_title := ""
+var _view_titles: Array[String] = []
+var _last_beep_second := -1
+var pickups: Array = []
 
 
 func _ready() -> void:
 	randomize()
 	_discover_levels()
-	renderer = RoadRenderer.new()
-	renderer.main = self
-	add_child(renderer)
-	hud = HudLayer.new()
-	add_child(hud)
 	menu = MenuLayer.new()
-	add_child(menu)
-	_load_level(0)   # idle stage 1 as the menu backdrop
+	_build_views(1)
+	add_child(menu)   # menu draws over every viewport
+	_load_level(0)    # idle stage 1 as the menu backdrop
 	_enter_menu()
 
+
+func solo() -> bool:
+	return player_count == 1
+
+
+## The furthest race progress among players (finished players count as
+## past the line). Rivals reference this for rubber-banding and attacks.
+func lead_progress() -> float:
+	var best := 0.0
+	for i in range(players.size()):
+		best = maxf(best, _effective_progress(i))
+	return best
+
+
+func _effective_progress(i: int) -> float:
+	if finished[i]:
+		return track.track_length() + float(100 - finish_order[i]) * 10.0
+	return players[i].position_z
+
+
+func player_z() -> float:
+	return views[0].renderer.player_z()
+
+
+# === VIEWS ===
+
+## Build the split-screen layout: SubViewport per player, each with its own
+## renderer and HUD. 1P: full frame. 2P: stacked halves. 4P: quadrants.
+## Draw distance shrinks with player count to keep four immediate-mode
+## renderers inside the frame budget.
+func _build_views(count: int) -> void:
+	player_count = count
+	for v in views:
+		v.container.queue_free()
+	views.clear()
+
+	var base := Vector2(1920, 1080)
+	var rects: Array = []
+	match count:
+		1: rects = [Rect2(Vector2.ZERO, base)]
+		2: rects = [Rect2(0, 0, base.x, base.y / 2),
+				Rect2(0, base.y / 2, base.x, base.y / 2)]
+		_: rects = [Rect2(0, 0, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
+				Rect2(0, base.y / 2, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, base.y / 2, base.x / 2, base.y / 2)]
+	var dd: int = GameConfig.camera.draw_distance
+	if count == 2:
+		dd = int(dd * 0.66)
+	elif count >= 4:
+		dd = int(dd * 0.45)
+
+	for i in range(count):
+		var container := SubViewportContainer.new()
+		container.stretch = true
+		container.position = rects[i].position
+		container.size = rects[i].size
+		add_child(container)
+		move_child(container, 0)   # keep the menu layer on top
+		var vp := SubViewport.new()
+		vp.size = Vector2i(rects[i].size)
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		container.add_child(vp)
+		var renderer := RoadRenderer.new()
+		renderer.main = self
+		renderer.player_index = i
+		renderer.draw_distance = dd
+		vp.add_child(renderer)
+		var hud := HudLayer.new()
+		vp.add_child(hud)
+		views.append({"container": container, "viewport": vp,
+				"renderer": renderer, "hud": hud})
+
+
+# === LEVEL FLOW ===
 
 ## Levels are auto-discovered: drop a new .gd file into res://scripts/levels/
 ## and it becomes a stage (played in filename order).
@@ -97,41 +182,91 @@ func _load_level(idx: int) -> void:
 	level.build(track)
 	track.finalize()
 
-	renderer.reset_camera()
 	cp_zs = track.mark_checkpoints(level.checkpoint_count)
 	_init_pickups()
 	section_time = level.time_limit / float(level.checkpoint_count + 1)
-	player_next_cp = 0
 	race_time = 0.0
+	_finishers = 0
+	_finish_deadline = -1.0
 
-	player = PlayerCar.new()
+	players.clear()
+	mirrors.clear()
+	next_cp.clear()
+	finished.clear()
+	finish_time.clear()
+	finish_order.clear()
+	_prev_air.clear()
+	_prev_boosting.clear()
+	for i in range(player_count):
+		SpriteCatalog.register_player(i)
+		var p := PlayerCar.new()
+		p.input_prefix = "p%d_" % i
+		# Side-by-side grid for multiple players, staggered slightly.
+		p.x = 0.0 if player_count == 1 else lerpf(-0.5, 0.5,
+				float(i) / float(player_count - 1))
+		# Forward stagger (never negative: fposmod would wrap a negative
+		# start to the end of the track — an instant finish).
+		p.position_z = float(i) * 120.0
+		players.append(p)
+		next_cp.append(0)
+		finished.append(false)
+		finish_time.append(0.0)
+		finish_order.append(-1)
+		_prev_air.append(0.0)
+		_prev_boosting.append(false)
+		mirrors.append({"z": 0.0, "offset": p.x, "speed": 0.0,
+				"sprite": "player_%d" % i, "y": 0.0, "vy": 0.0, "air": 0.0,
+				"pidx": i})
 	_spawn_traffic()
+	for i in range(player_count):
+		_sync_mirror(i, true)
 	rivals = RivalManager.new()
 	rivals.spawn(self, level.rival_count if mode == Mode.RACE else 0)
 
 	time_left = section_time
 	_last_beep_second = -1
-	hud.set_stage(level.level_name)
-	hud.set_message("")
-	hud.hide_leaderboard()
-	hud.clear_race_ui()
-	hud.set_race_time(0.0)
+	for v in views:
+		v.renderer.reset_camera()
+		v.renderer.player = players[v.renderer.player_index]
+		v.hud.set_stage(level.level_name)
+		v.hud.set_message("")
+		v.hud.hide_leaderboard()
+		v.hud.clear_race_ui()
+		v.hud.set_race_time(0.0)
 	Audio.stop_engine()
 
 
-## Load a stage and begin its countdown (level music starts here so the
-## idle menu backdrop stays on menu music).
+## Keep a player's world mirror entity in sync (position, segment lists).
+## The mirror sits where the car SPRITE sits: player_z() ahead of the camera.
+func _sync_mirror(i: int, force_seg: bool = false) -> void:
+	var m: Dictionary = mirrors[i]
+	var p := players[i]
+	var new_z := fposmod(p.position_z + player_z(), track.track_length())
+	var old_seg := find_segment(float(m.z))
+	m.z = new_z
+	m.offset = p.x
+	m.speed = p.speed
+	m.air = p.air
+	m.y = p.y_pos
+	var new_seg := find_segment(new_z)
+	if force_seg:
+		new_seg.cars.append(m)
+	elif old_seg.index != new_seg.index:
+		old_seg.cars.erase(m)
+		new_seg.cars.append(m)
+
+
 func _start_race(idx: int) -> void:
 	_load_level(idx)
 	menu.hide_menu()
 	var fractions: Array = []
 	for z in cp_zs:
 		fractions.append(z / track.track_length())
-	hud.setup_progress(fractions)
+	for v in views:
+		v.hud.setup_progress(fractions)
 	state = State.COUNTDOWN
 	countdown_t = 3.0
 	_last_count = -1
-	# Levels without a dedicated (and present) track get a random existing one.
 	var music_name := level.music
 	if music_name.is_empty() or not Audio.has_sound(music_name):
 		var available: Array = level_musics.filter(
@@ -144,58 +279,16 @@ func _start_race(idx: int) -> void:
 func _enter_menu() -> void:
 	state = State.MENU
 	menu_sel = 0
-	hud.set_message("")
-	hud.hide_leaderboard()
-	hud.clear_race_ui()
+	for v in views:
+		v.hud.set_message("")
+		v.hud.hide_leaderboard()
+		v.hud.clear_race_ui()
 	Audio.stop_engine()
 	Audio.play_music("music_menu")
 	menu.show_main(MENU_ITEMS, menu_sel)
 
 
-## Player checkpoint crossing: extend the section timer (leftover time
-## carries over, OutRun style) and flash the delta to the fastest rival
-## through the same checkpoint.
-func _check_player_checkpoint(prev_z: float) -> void:
-	if player_next_cp >= cp_zs.size():
-		return
-	var cp_z := cp_zs[player_next_cp]
-	if prev_z < cp_z and player.position_z >= cp_z:
-		time_left += section_time
-		_last_beep_second = -1
-		Audio.play("checkpoint")
-		if mode == Mode.TIME_TRIAL:
-			hud.set_flash("CHECKPOINT")
-			player_next_cp += 1
-			return
-		# Racing-standard delta: "+" behind the leader (red), "-" ahead (green).
-		var leader_t: float = rivals.leader_cp_times[player_next_cp]
-		var green := Color(0.35, 0.95, 0.4)
-		var red := Color(0.95, 0.3, 0.25)
-		if leader_t < 0.0:
-			# Nobody has crossed yet: your cushion over the best chaser.
-			var eta: float = rivals.next_rival_eta(cp_z)
-			hud.set_flash("CHECKPOINT  -%s  (LEADER)"
-					% HudLayer.format_time(eta), green)
-		else:
-			var delta := race_time - leader_t
-			var sign_str := "+" if delta >= 0.0 else "-"
-			hud.set_flash("CHECKPOINT  %s%s"
-					% [sign_str, HudLayer.format_time(absf(delta))],
-					red if delta >= 0.0 else green)
-		player_next_cp += 1
-
-
-func _update_progress_bar() -> void:
-	var track_len := track.track_length()
-	var dots: Array = []
-	for r in rivals.rivals:
-		var def: Dictionary = SpriteCatalog.get_def(r.sprite)
-		dots.append({
-			"p": minf(float(r.z) / track_len, 1.0),
-			"color": def.get("map_color", Color.WHITE),
-		})
-	hud.update_progress(player.position_z / track_len, dots)
-
+# === SHARED HELPERS (unchanged logic) ===
 
 ## Ballistic vertical step for an NPC car dict. Grounded motion sets
 ## vertical velocity from terrain slope x speed, so hill crests launch cars
@@ -263,6 +356,7 @@ func find_segment(z: float) -> Dictionary:
 	return track.segments[i % seg_count]
 
 
+
 func _process(dt: float) -> void:
 	if track == null:
 		return
@@ -275,27 +369,29 @@ func _process(dt: float) -> void:
 			_start_race(level_index + 1)
 			return
 
-	# Esc (ui_cancel) backs out of any race state to the menu.
 	if state >= State.COUNTDOWN and Input.is_action_just_pressed("ui_cancel"):
 		_enter_menu()
 		return
 
-	# Pause toggle (P / gamepad Start) during the countdown or the race.
 	if Input.is_action_just_pressed("pause"):
 		if state == State.RUNNING or state == State.COUNTDOWN:
 			paused_from = state
 			state = State.PAUSED
-			hud.set_message("PAUSED")
+			for v in views:
+				v.hud.set_message("PAUSED")
 			Audio.stop_engine()
 		elif state == State.PAUSED:
 			state = paused_from
-			hud.set_message("")
-			_last_count = -1   # countdown repaints its number on resume
+			for v in views:
+				v.hud.set_message("")
+			_last_count = -1
 		return
 
 	match state:
 		State.MENU:
 			_menu_frame(dt)
+		State.PLAYER_SELECT:
+			_player_select_frame(dt)
 		State.LEVEL_SELECT:
 			_level_select_frame(dt)
 		State.LEADERBOARD:
@@ -305,20 +401,37 @@ func _process(dt: float) -> void:
 		State.RUNNING:
 			_run_frame(dt)
 		State.STAGE_CLEAR:
-			race_time += dt   # late finishers still get real times
-			_coast_frame(dt, GameConfig.player.max_speed * 0.35)
-			if mode == Mode.RACE:
-				hud.show_leaderboard(rivals.board_entries(player_finish_time),
-						_board_title)
-			if Input.is_action_just_pressed("accelerate"):
+			race_time += dt
+			for i in range(players.size()):
+				_coast_player(i, dt, GameConfig.player.max_speed * 0.35)
+			_update_traffic(dt)
+			rivals.update(dt, self)
+			_scroll_backgrounds(dt)
+			if not (solo() and mode == Mode.TIME_TRIAL):
+				var live := _merged_board()
+				for i in range(views.size()):
+					views[i].hud.show_leaderboard(live, _view_titles[i])
+			if Input.is_action_just_pressed("ui_accept") or _any_accel():
 				_start_race(level_index + 1)
 		State.GAME_OVER:
-			_coast_frame(dt, 0.0)
+			for i in range(players.size()):
+				_coast_player(i, dt, 0.0)
+			_update_traffic(dt)
+			rivals.update(dt, self)
 		State.PAUSED:
-			pass   # world frozen; only the pause toggle and Esc are live
+			pass
 
-	hud.set_speed(player.speed_kmh())
-	hud.set_time(time_left)
+	for i in range(views.size()):
+		views[i].hud.set_speed(players[views[i].renderer.player_index].speed_kmh())
+		if solo():
+			views[i].hud.set_time(time_left)
+
+
+func _any_accel() -> bool:
+	for i in range(player_count):
+		if Input.is_action_just_pressed("p%d_accelerate" % i):
+			return true
+	return false
 
 
 ## Title menu: traffic ambles through the idle backdrop while the player
@@ -342,16 +455,51 @@ func _menu_frame(dt: float) -> void:
 		match menu_sel:
 			0:
 				mode = Mode.RACE
-				_open_level_select()
+				_open_player_select()
 			1:
 				mode = Mode.TIME_TRIAL
-				_open_level_select()
+				_open_player_select()
 			2:
 				state = State.LEADERBOARD
 				select_sel = 0
 				_refresh_board()
 			3:
 				get_tree().quit()
+
+
+func _open_player_select() -> void:
+	state = State.PLAYER_SELECT
+	menu_sel = PLAYER_COUNTS.find(player_count)
+	if menu_sel < 0:
+		menu_sel = 0
+	menu.show_list("%s — PLAYERS" % _mode_name(), PLAYER_ITEMS, menu_sel)
+
+
+func _player_select_frame(dt: float) -> void:
+	_update_traffic(dt)
+	var moved := 0
+	if Input.is_action_just_pressed("ui_down"):
+		moved = 1
+	elif Input.is_action_just_pressed("ui_up"):
+		moved = -1
+	if moved != 0:
+		menu_sel = wrapi(menu_sel + moved, 0, PLAYER_ITEMS.size())
+		Audio.play("menu_move")
+		menu.show_list("%s — PLAYERS" % _mode_name(), PLAYER_ITEMS, menu_sel)
+	if Input.is_action_just_pressed("ui_accept"):
+		Audio.play("menu_select")
+		var count: int = PLAYER_COUNTS[menu_sel]
+		if count != player_count:
+			_build_views(count)
+			_load_level(level_index)   # rebuild the backdrop for the new views
+		_open_level_select()
+	elif Input.is_action_just_pressed("ui_cancel"):
+		Audio.play("menu_move")
+		_enter_menu()
+
+
+func _mode_name() -> String:
+	return "RACE" if mode == Mode.RACE else "TIME TRIAL"
 
 
 func _open_level_select() -> void:
@@ -365,10 +513,10 @@ func _level_select_frame(dt: float) -> void:
 	_update_traffic(dt)
 	var moved := 0
 	if (Input.is_action_just_pressed("ui_down")
-			or Input.is_action_just_pressed("steer_right")):
+			or Input.is_action_just_pressed("p0_steer_right")):
 		moved = 1
 	elif (Input.is_action_just_pressed("ui_up")
-			or Input.is_action_just_pressed("steer_left")):
+			or Input.is_action_just_pressed("p0_steer_left")):
 		moved = -1
 	if moved != 0:
 		select_sel = wrapi(select_sel + moved, 0, level_names.size())
@@ -380,17 +528,17 @@ func _level_select_frame(dt: float) -> void:
 		_start_race(select_sel)
 	elif Input.is_action_just_pressed("ui_cancel"):
 		Audio.play("menu_move")
-		_enter_menu()
+		_open_player_select()
 
 
 func _leaderboard_frame(dt: float) -> void:
 	_update_traffic(dt)
 	var moved := 0
 	if (Input.is_action_just_pressed("ui_right")
-			or Input.is_action_just_pressed("steer_right")):
+			or Input.is_action_just_pressed("p0_steer_right")):
 		moved = 1
 	elif (Input.is_action_just_pressed("ui_left")
-			or Input.is_action_just_pressed("steer_left")):
+			or Input.is_action_just_pressed("p0_steer_left")):
 		moved = -1
 	if moved != 0:
 		select_sel = wrapi(select_sel + moved, 0, level_names.size())
@@ -414,150 +562,305 @@ func _refresh_board() -> void:
 func _countdown_frame(dt: float) -> void:
 	countdown_t -= dt
 	_update_traffic(dt)
-	_scroll_background(dt)
+	_scroll_backgrounds(dt)
 	Audio.update_engine(0.0, false)
 	var whole := int(ceilf(countdown_t))
 	if countdown_t <= 0.0:
 		state = State.RUNNING
-		hud.set_message("")
-		hud.set_flash("GO!")
+		for v in views:
+			v.hud.set_message("")
+			v.hud.set_flash("GO!")
 		Audio.play("countdown_go")
 	elif whole != _last_count:
 		_last_count = whole
-		hud.set_message(str(whole))
+		for v in views:
+			v.hud.set_message(str(whole))
 		Audio.play("countdown_beep")
 
 
+# === THE RACE FRAME ===
+
 func _run_frame(dt: float) -> void:
 	race_time += dt
-	hud.set_race_time(race_time)
-	var prev_z := player.position_z
-	var crossed := player.update(dt, self)
-	_check_player_checkpoint(prev_z)
+	for v in views:
+		v.hud.set_race_time(race_time)
+
+	for i in range(players.size()):
+		if finished[i]:
+			_coast_player(i, dt, GameConfig.player.max_speed * 0.35)
+			continue
+		var p := players[i]
+		var prev_z := p.position_z
+		var crossed := p.update(dt, self)
+		_sync_mirror(i)
+		_check_player_checkpoint(i, prev_z)
+		_per_player_effects(i, dt)
+		_check_collisions(i)
+		if crossed:
+			_on_player_finish(i)
+
 	_update_traffic(dt)
 	rivals.update(dt, self)
-	if mode == Mode.RACE:
+	if solo() and mode == Mode.RACE:
 		for e in rivals.events:
-			hud.set_flash(e)
-		hud.set_position_rank(rivals.player_rank(player.position_z),
-				rivals.total_racers())
-	_update_progress_bar()
+			views[0].hud.set_flash(e)
+	_update_ranks_and_bars()
+	_update_pickup_respawns(dt)
+	_scroll_backgrounds(dt)
+	Audio.update_engine(players[0].speed / GameConfig.player.max_speed,
+			absf(players[0].x) > 1.0, players[0].steer_dir)
 
-	# Slipstream whoosh as the tow reaches full strength.
-	if player.slip > 0.9:
+	# Countdown timer, time-up, and the last-10 beeps are solo-only:
+	# multiplayer is a pure race to the line.
+	if solo():
+		time_left -= dt
+		var whole_seconds := int(ceilf(time_left))
+		if whole_seconds <= 10 and whole_seconds >= 1 \
+				and whole_seconds != _last_beep_second:
+			_last_beep_second = whole_seconds
+			Audio.play("time_warning")
+		if not finished[0] and time_left <= 0.0:
+			time_left = 0.0
+			state = State.GAME_OVER
+			views[0].hud.set_message("TIME UP — press R to retry")
+			Audio.play("game_over")
+			return
+
+	# Multiplayer stragglers: grace period after the first finish.
+	if _finish_deadline > 0.0 and race_time >= _finish_deadline:
+		for i in range(players.size()):
+			if not finished[i]:
+				_mark_finished(i, INF)
+	if _finishers == players.size():
+		_end_race()
+
+
+func _per_player_effects(i: int, dt: float) -> void:
+	var p := players[i]
+	var v: Dictionary = views[i]
+	if p.slip > 0.9:
 		Audio.play("slipstream", -4.0, 1.0, 1.5)
-
-	# Boost ignition: camera shake + sound on the rising edge.
-	if player.boosting and not _prev_boosting:
-		renderer.shake()
+	if p.boosting and not _prev_boosting[i]:
+		v.renderer.shake()
 		Audio.play("boost", -3.0, 1.0, 0.3)
-	_prev_boosting = player.boosting
-	hud.set_boost(player.boost / GameConfig.player.boost_capacity)
+	_prev_boosting[i] = p.boosting
+	v.hud.set_boost(p.boost / GameConfig.player.boost_capacity)
+	if _prev_air[i] > 200.0 and p.air <= 0.5:
+		Audio.play("land", -6.0)
+	_prev_air[i] = p.air
+	# Boost canisters at this player's car.
+	var pseg := find_segment(p.position_z + player_z())
+	for pu in pseg.pickups:
+		if not bool(pu.taken) and p.air < 120.0 \
+				and absf(float(pu.offset) - p.x) < 0.4:
+			pu.taken = true
+			pu.respawn_t = GameConfig.race.pickup_respawn
+			p.boost = minf(p.boost + GameConfig.race.pickup_boost_amount,
+					GameConfig.player.boost_capacity)
+			Audio.play("pickup", -2.0)
 
-	# Boost canisters: respawn timers, and collection at the player's car.
+
+func _update_pickup_respawns(dt: float) -> void:
 	for pu in pickups:
 		if bool(pu.taken):
 			pu.respawn_t = float(pu.respawn_t) - dt
 			if float(pu.respawn_t) <= 0.0:
 				pu.taken = false
-	var pseg := find_segment(player.position_z + renderer.player_z())
-	for pu in pseg.pickups:
-		if not bool(pu.taken) and player.air < 120.0 \
-				and absf(float(pu.offset) - player.x) < 0.4:
-			pu.taken = true
-			pu.respawn_t = GameConfig.race.pickup_respawn
-			player.boost = minf(player.boost + GameConfig.race.pickup_boost_amount,
-					GameConfig.player.boost_capacity)
-			Audio.play("pickup", -2.0)
 
-	# Landing thud after real air.
-	if _prev_air > 200.0 and player.air <= 0.5:
-		Audio.play("land", -6.0)
-	_prev_air = player.air
-	_check_collisions()
-	_scroll_background(dt)
-	Audio.update_engine(player.speed / GameConfig.player.max_speed,
-			absf(player.x) > 1.0, player.steer_dir)
 
-	time_left -= dt
-	var whole_seconds := int(ceilf(time_left))
-	if whole_seconds <= 10 and whole_seconds >= 1 and whole_seconds != _last_beep_second:
-		_last_beep_second = whole_seconds
-		Audio.play("time_warning")
+func _update_ranks_and_bars() -> void:
+	var track_len := track.track_length()
+	var rival_dots: Array = []
+	for r in rivals.rivals:
+		var def: Dictionary = SpriteCatalog.get_def(r.sprite)
+		rival_dots.append({"p": minf(float(r.z) / track_len, 1.0),
+				"color": def.get("map_color", Color.WHITE)})
+	for i in range(views.size()):
+		var pi: int = views[i].renderer.player_index
+		var dots: Array = rival_dots.duplicate()
+		for j in range(players.size()):
+			if j == pi:
+				continue
+			var pdef: Dictionary = SpriteCatalog.get_def("player_%d" % j)
+			dots.append({"p": minf(_effective_progress(j) / track_len, 1.0),
+					"color": pdef.get("map_color", Color.WHITE)})
+		views[i].hud.update_progress(players[pi].position_z / track_len, dots)
+		if mode == Mode.RACE or not solo():
+			views[i].hud.set_position_rank(_rank_of(pi), _total_racers())
 
-	if crossed:
-		state = State.STAGE_CLEAR
-		player_finish_time = race_time
-		var fname := String(level_paths[level_index]).get_file()
-		var mode_key := "race" if mode == Mode.RACE else "time_trial"
-		var best_rank := Records.add_time(fname, mode_key, player_finish_time)
-		hud.set_message("")
-		if mode == Mode.RACE:
-			var entries: Array = rivals.board_entries(player_finish_time)
-			var final_rank := 1
-			for i in range(entries.size()):
-				if bool(entries[i].is_player):
-					final_rank = i + 1
-					break
-			_board_title = "FINISHED %s of %d" % [HudLayer.ordinal(final_rank),
-					rivals.total_racers()]
-			if best_rank > 0:
-				_board_title += "  —  BEST #%d" % best_rank
-			hud.show_leaderboard(entries, _board_title)
+
+func _total_racers() -> int:
+	return rivals.rivals.size() + players.size()
+
+
+func _rank_of(i: int) -> int:
+	var prog := _effective_progress(i)
+	var rank := 1
+	for r in rivals.rivals:
+		if float(r.z) > prog:
+			rank += 1
+	for j in range(players.size()):
+		if j != i and _effective_progress(j) > prog:
+			rank += 1
+	return rank
+
+
+# === FINISHING ===
+
+func _on_player_finish(i: int) -> void:
+	_mark_finished(i, race_time)
+	Audio.play("stage_clear")
+	views[i].hud.set_flash("FINISHED %s!" % HudLayer.ordinal(_rank_of(i)))
+	if _finish_deadline < 0.0 and players.size() > 1:
+		_finish_deadline = race_time + MP_FINISH_GRACE
+	if _finishers == players.size():
+		_end_race()
+
+
+func _mark_finished(i: int, t: float) -> void:
+	if finished[i]:
+		return
+	finished[i] = true
+	finish_time[i] = t
+	finish_order[i] = _finishers
+	_finishers += 1
+
+
+func _end_race() -> void:
+	state = State.STAGE_CLEAR
+	var fname := String(level_paths[level_index]).get_file()
+	var mode_key := "race" if mode == Mode.RACE else "time_trial"
+	var best_rank := -1
+	if solo() and finish_time[0] != INF:
+		best_rank = Records.add_time(fname, mode_key, finish_time[0])
+
+	if solo() and mode == Mode.TIME_TRIAL:
+		var times: Array = Records.get_times(fname, mode_key)
+		var entries: Array = []
+		var marked := false
+		for k in range(times.size()):
+			var is_you := (not marked
+					and absf(float(times[k]) - finish_time[0]) < 0.0005)
+			if is_you:
+				marked = true
+			entries.append({"name": "YOU" if is_you else "-",
+					"time": float(times[k]), "is_player": is_you})
+		_board_title = "TIME TRIAL — %s" % HudLayer.format_time(finish_time[0])
+		if best_rank > 0:
+			_board_title += "  (BEST #%d)" % best_rank
+		views[0].hud.show_leaderboard(entries, _board_title)
+		return
+
+	var entries := _merged_board()
+	_view_titles.clear()
+	for i in range(views.size()):
+		var pi: int = views[i].renderer.player_index
+		var rank := 1
+		for k in range(entries.size()):
+			if int(entries[k].get("pidx", -1)) == pi:
+				rank = k + 1
+				break
+		var title := "FINISHED %s of %d" % [HudLayer.ordinal(rank), _total_racers()]
+		if solo() and best_rank > 0:
+			title += "  —  BEST #%d" % best_rank
+		if i == 0:
+			_board_title = title
+		_view_titles.append(title)
+		views[i].hud.show_leaderboard(entries, title)
+
+
+## Merged results: players (by finish time; DNF ranked by progress at the
+## deadline) + rivals (finished by time, still-racing in running order).
+func _merged_board() -> Array:
+	var done: Array = []
+	var racing: Array = []
+	for i in range(players.size()):
+		var label: String = "YOU" if solo() else PLAYER_LABELS[i]
+		if finished[i] and finish_time[i] != INF:
+			done.append({"name": label, "time": finish_time[i],
+					"is_player": true, "pidx": i})
 		else:
-			# Time trial: your run against the stage's all-time top 10.
-			var times: Array = Records.get_times(fname, mode_key)
-			var entries: Array = []
-			var marked := false
-			for i in range(times.size()):
-				var is_you := (not marked
-						and absf(float(times[i]) - player_finish_time) < 0.0005)
-				if is_you:
-					marked = true
-				entries.append({"name": "YOU" if is_you else "-",
-						"time": float(times[i]), "is_player": is_you})
-			_board_title = "TIME TRIAL — %s" % HudLayer.format_time(player_finish_time)
-			if best_rank > 0:
-				_board_title += "  (BEST #%d)" % best_rank
-			hud.show_leaderboard(entries, _board_title)
-		Audio.play("stage_clear")
-	elif time_left <= 0.0:
-		time_left = 0.0
-		state = State.GAME_OVER
-		hud.set_message("TIME UP — press R to retry")
-		Audio.play("game_over")
+			racing.append({"name": label, "time": -1.0, "is_player": true,
+					"pidx": i, "z": _effective_progress(i)})
+	for r in rivals.rivals:
+		if float(r.finish_time) >= 0.0:
+			done.append({"name": r.name, "time": float(r.finish_time),
+					"is_player": false})
+		else:
+			racing.append({"name": r.name, "time": -1.0, "is_player": false,
+					"z": float(r.z)})
+	done.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	racing.sort_custom(func(a, b): return float(a.z) > float(b.z))
+	return done + racing
 
 
-## Keeps the world moving (with input disabled) during clear/game-over states.
-func _coast_frame(dt: float, target_speed: float) -> void:
-	player.speed = move_toward(player.speed, target_speed, GameConfig.player.max_speed * 0.5 * dt)
-	var g_prev := player._sprite_ground(self)
-	player.position_z = fposmod(player.position_z + player.speed * dt, track.track_length())
-	player.step_vertical(dt, self, g_prev)
-	player.steer_dir = 0.0
-	player.bounce = 0.0
-	player.x = move_toward(player.x, 0.0, dt * 1.5)
-	_update_traffic(dt)
-	rivals.update(dt, self)
-	_scroll_background(dt)
-	Audio.update_engine(player.speed / GameConfig.player.max_speed, false)
+# === CHECKPOINTS ===
+
+func _check_player_checkpoint(i: int, prev_z: float) -> void:
+	if next_cp[i] >= cp_zs.size():
+		return
+	var cp_z := cp_zs[next_cp[i]]
+	var p := players[i]
+	if prev_z < cp_z and p.position_z >= cp_z:
+		var hud: HudLayer = views[i].hud
+		if solo():
+			time_left += section_time
+			_last_beep_second = -1
+		Audio.play("checkpoint")
+		if mode == Mode.TIME_TRIAL and solo():
+			hud.set_flash("CHECKPOINT")
+			next_cp[i] += 1
+			return
+		var leader_t := -1.0
+		if not rivals.leader_cp_times.is_empty():
+			leader_t = rivals.leader_cp_times[next_cp[i]]
+		var green := Color(0.35, 0.95, 0.4)
+		var red := Color(0.95, 0.3, 0.25)
+		if leader_t < 0.0 and mode == Mode.RACE:
+			var eta: float = rivals.next_rival_eta(cp_z)
+			hud.set_flash("CHECKPOINT  -%s  (LEADER)"
+					% HudLayer.format_time(eta), green)
+		elif leader_t >= 0.0:
+			var delta := race_time - leader_t
+			var sign_str := "+" if delta >= 0.0 else "-"
+			hud.set_flash("CHECKPOINT  %s%s"
+					% [sign_str, HudLayer.format_time(absf(delta))],
+					red if delta >= 0.0 else green)
+		else:
+			hud.set_flash("CHECKPOINT")
+		next_cp[i] += 1
 
 
-func _scroll_background(dt: float) -> void:
-	var seg := find_segment(player.position_z)
-	# In a right-hand curve the world rotates left past you, so the far
-	# hills sweep left: offset increases (sampled as x + offset).
-	renderer.hill_offset += seg.curve * (player.speed / GameConfig.player.max_speed) * dt * 120.0
+# === COASTING / BACKGROUND ===
 
+func _coast_player(i: int, dt: float, target_speed: float) -> void:
+	var p := players[i]
+	p.speed = move_toward(p.speed, target_speed, GameConfig.player.max_speed * 0.5 * dt)
+	var g_prev := p._sprite_ground(self)
+	p.position_z = fposmod(p.position_z + p.speed * dt, track.track_length())
+	p.step_vertical(dt, self, g_prev)
+	p.steer_dir = 0.0
+	p.bounce = 0.0
+	p.x = move_toward(p.x, 0.0 if solo() else p.x, dt * 1.5)
+	_sync_mirror(i)
+
+
+func _scroll_backgrounds(dt: float) -> void:
+	for v in views:
+		var p: PlayerCar = players[v.renderer.player_index]
+		var seg := find_segment(p.position_z)
+		v.renderer.hill_offset += seg.curve \
+				* (p.speed / GameConfig.player.max_speed) * dt * 120.0
+
+
+# === TRAFFIC / AI STEERING / COLLISIONS ===
 
 func _update_traffic(dt: float) -> void:
 	var track_len := track.track_length()
-	var player_seg := find_segment(player.position_z)
-	var player_w: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
 	for car in cars:
 		var old_seg := find_segment(car.z)
 		car.offset = clampf(
-				float(car.offset) + _car_steer(car, old_seg, player_seg, player_w) * dt * 60.0,
+				float(car.offset) + _car_steer(car, old_seg) * dt * 60.0,
 				-1.2, 1.2)
 		var g_prev := ground_y(float(car.z))
 		car.z = fposmod(car.z + car.speed * dt, track_len)
@@ -568,37 +871,26 @@ func _update_traffic(dt: float) -> void:
 			new_seg.cars.append(car)
 
 
-## Per-frame lateral steering for one NPC car (codeincomplete's updateCarOffset).
-## Scans up to AI_LOOKAHEAD segments ahead; dodges the player and slower cars,
-## steering harder the closer the obstacle. Returns offset delta per 1/60 s.
-## lookahead: how many segments ahead the car scans (rivals scan farther —
-## at racing speeds the default gives too little reaction time).
-func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
-		player_w: float, lookahead: int = AI_LOOKAHEAD) -> float:
+## Per-frame lateral steering for one NPC car. Scans ahead and dodges any
+## slower car in the segment lists — traffic, rivals, and every player's
+## mirror entity alike. AI is skipped for cars far from every player.
+func _car_steer(car: Dictionary, car_seg: Dictionary,
+		lookahead: int = AI_LOOKAHEAD) -> float:
 	var seg_count := track.segments.size()
-	# Cars far outside the drawn window don't need AI (invisible anyway).
-	var rel: int = (int(car_seg.index) - int(player_seg.index) + seg_count) % seg_count
-	if rel > GameConfig.camera.draw_distance:
+	var near_any := false
+	for p in players:
+		var pseg := find_segment(p.position_z)
+		var rel: int = (int(car_seg.index) - int(pseg.index) + seg_count) % seg_count
+		if rel <= GameConfig.camera.draw_distance:
+			near_any = true
+			break
+	if not near_any:
 		return 0.0
 
 	var car_w: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
 	var car_x: float = float(car.offset)
 	for i in range(1, lookahead):
 		var seg: Dictionary = track.segments[(int(car_seg.index) + i) % seg_count]
-
-		# Player ahead of us, we're faster, and paths overlap: swerve.
-		if seg.index == player_seg.index and car.speed > player.speed \
-				and _overlap(player.x, player_w, car_x, car_w, 1.2):
-			var dir := 0.0
-			if player.x > 0.5:
-				dir = -1.0
-			elif player.x < -0.5:
-				dir = 1.0
-			else:
-				dir = 1.0 if car_x > player.x else -1.0
-			return dir / float(i) * float(car.speed - player.speed) / GameConfig.player.max_speed
-
-		# Slower car ahead: swerve around it.
 		for other in seg.cars:
 			if other == car:
 				continue
@@ -614,43 +906,45 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 					dir = 1.0
 				else:
 					dir = 1.0 if car_x > other_x else -1.0
-				return dir / float(i) * float(car.speed - other.speed) / GameConfig.player.max_speed
+				return dir / float(i) * float(car.speed - other.speed) \
+						/ GameConfig.player.max_speed
 
-	# Nothing ahead: drift back toward the road if we've wandered wide.
 	if float(car.offset) < -0.9:
 		return 0.1
 	if float(car.offset) > 0.9:
 		return -0.1
 	return 0.0
 
-func _check_collisions() -> void:
-	# Airborne cars sail clean over traffic and scenery.
-	if player.air > 250.0:
+
+func _check_collisions(i: int) -> void:
+	var p := players[i]
+	if p.air > 250.0:
 		return
-	var seg := find_segment(player.position_z + renderer.player_z())
+	var seg := find_segment(p.position_z + player_z())
 	var player_w: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
 
-	# Roadside scenery (only ever placed off-road, so only check when off-road).
-	if absf(player.x) > 0.8:
+	if absf(p.x) > 0.8:
 		for spr in seg.sprites:
 			var def: Dictionary = SpriteCatalog.get_def(spr.name)
 			if not def.collidable:
 				continue
 			var sw: float = def.world_w / RoadRenderer.ROAD_WIDTH
-			if _overlap(player.x, player_w, spr.offset, sw):
-				player.speed = GameConfig.player.max_speed * 0.06
+			if _overlap(p.x, player_w, spr.offset, sw):
+				p.speed = GameConfig.player.max_speed * 0.06
 				Audio.play("crash", 0.0, 1.0, 0.5)
 				break
 
-	# Traffic: rear-ending a slower car slams your speed down and pushes
-	# you back behind it.
+	# Rear-ending anything slower — traffic, rivals, or another player's
+	# mirror — slams your speed and pushes you back behind it.
 	for car in seg.cars:
-		if player.speed <= car.speed:
+		if int(car.get("pidx", -1)) == i:
+			continue   # your own mirror
+		if p.speed <= car.speed:
 			continue
 		var cw: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
-		if _overlap(player.x, player_w, car.offset, cw, 0.8):
-			player.speed = car.speed * (car.speed / maxf(player.speed, 1.0))
-			player.position_z = fposmod(car.z - renderer.player_z(), track.track_length())
+		if _overlap(p.x, player_w, car.offset, cw, 0.8):
+			p.speed = car.speed * (car.speed / maxf(p.speed, 1.0))
+			p.position_z = fposmod(car.z - player_z(), track.track_length())
 			Audio.play("bump", 0.0, 1.0, 0.3)
 			break
 

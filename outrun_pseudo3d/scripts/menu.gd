@@ -43,8 +43,13 @@ func hide_menu() -> void:
 
 ## items: displayed strings; sel: highlighted index.
 func show_main(items: Array[String], sel: int) -> void:
+	show_list(TITLE, items, sel)
+
+
+## Generic selectable list under an arbitrary title.
+func show_list(title: String, items: Array[String], sel: int) -> void:
 	visible = true
-	_title_label.text = TITLE
+	_title_label.text = title
 	var rows := "\n\n[center]"
 	for i in range(items.size()):
 		rows += _row(items[i], i == sel) + "\n\n"

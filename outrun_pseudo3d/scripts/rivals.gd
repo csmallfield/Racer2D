@@ -74,10 +74,10 @@ func spawn(main: Node2D, count: int) -> void:
 func update(dt: float, main: Node2D) -> void:
 	events.clear()
 	var track_len: float = main.track.track_length()
-	var player: PlayerCar = main.player
-	var player_seg: Dictionary = main.find_segment(player.position_z)
-	var player_w: float = SpriteCatalog.get_def("player").world_w \
-			/ RoadRenderer.ROAD_WIDTH
+	# All player-relative behavior (rubber band, boost attacks, flashes)
+	# references the LEAD player; avoidance of every player happens through
+	# their mirror entities in the segment car lists.
+	var lead_progress: float = main.lead_progress()
 
 	for r in rivals:
 		var old_seg: Dictionary = main.find_segment(float(r.z))
@@ -88,7 +88,7 @@ func update(dt: float, main: Node2D) -> void:
 		var target: float = r.base_speed
 		target *= 1.0 - minf(cfg.curve_slowdown_cap,
 				absf(float(old_seg.curve)) * cfg.curve_slowdown)
-		var gap: float = float(r.z) - player.position_z
+		var gap: float = float(r.z) - lead_progress
 		if gap > cfg.rubber_range:
 			target *= cfg.rubber_ahead
 		elif gap < -cfg.rubber_range:
@@ -112,12 +112,6 @@ func update(dt: float, main: Node2D) -> void:
 			r.boost = maxf(0.0, float(r.boost) - dt)
 			target *= 1.0 + GameConfig.player.boost_top_bonus
 
-		# Don't ghost through the player: right behind and overlapping,
-		# a faster rival tucks in until the dodge AI finds a way around.
-		if gap < 0.0 and gap > -cfg.ram_distance and float(r.speed) > player.speed \
-				and _overlap(player.x, player_w, float(r.offset), rival_w, 0.9):
-			target = minf(target, player.speed * 0.95)
-
 		r.speed = move_toward(float(r.speed), target, cfg.accel * dt)
 
 		# --- Steering: dodge obstacles, otherwise run the racing line.
@@ -126,7 +120,7 @@ func update(dt: float, main: Node2D) -> void:
 		# deaf to opposite ones. Without this, per-frame dodge impulses
 		# alternate with lane-keeping pulling back toward the obstacle and
 		# the rival vibrates instead of swerving. ---
-		var dodge: float = main._car_steer(r, old_seg, player_seg, player_w, cfg.lookahead)
+		var dodge: float = main._car_steer(r, old_seg, cfg.lookahead)
 		if absf(dodge) > 0.0001 \
 				and (float(r.dodge_t) <= 0.0 or signf(dodge) == float(r.dodge_dir)):
 			r.dodge_dir = signf(dodge)
@@ -191,8 +185,8 @@ func update(dt: float, main: Node2D) -> void:
 			r.finished = true
 			r.finish_time = float(main.race_time)
 
-		# --- Overtake events (only when it happens in your mirrors). ---
-		var ahead := float(r.z) > player.position_z
+		# --- Overtake events (solo only; measured against the lead player). ---
+		var ahead := float(r.z) > lead_progress
 		if ahead != bool(r.was_ahead) and absf(gap) < cfg.flash_range:
 			if ahead:
 				events.append("%s PASSED YOU" % r.name)

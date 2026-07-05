@@ -16,11 +16,17 @@ var race_time_label: Label
 var board_bg: ColorRect
 var board_label: RichTextLabel
 var _flash_t := 0.0
+# Layout scale vs the 1920x1080 design (split-screen viewports are smaller).
+var _kx := 1.0
+var _ky := 1.0
 var track_bar: TrackBar
 var boost_bar: BoostBar
 
 
 func _ready() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	_kx = vp.x / 1920.0
+	_ky = vp.y / 1080.0
 	stage_label = _make_label(Vector2(36, 24), Vector2(900, 60), 39,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
 	time_label = _make_label(Vector2(0, 21), Vector2(1920, 90), 66,
@@ -36,31 +42,34 @@ func _ready() -> void:
 	race_time_label = _make_label(Vector2(0, 108), Vector2(1920, 45), 30,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
 	boost_bar = BoostBar.new()
-	boost_bar.position = Vector2(36, 940)
-	boost_bar.size = Vector2(300, 21)
+	boost_bar.position = Vector2(36 * _kx, 940 * _ky)
+	boost_bar.size = Vector2(300 * _kx, 21 * _ky)
 	boost_bar.visible = false
 	add_child(boost_bar)
 	track_bar = TrackBar.new()
-	track_bar.position = Vector2(360, 993)
-	track_bar.size = Vector2(1200, 18)
+	track_bar.position = Vector2(360 * _kx, 993 * _ky)
+	track_bar.size = Vector2(1200 * _kx, 18 * _ky)
+	track_bar.k = _ky
 	track_bar.visible = false
 	add_child(track_bar)
 	_make_leaderboard()
 	hint_label = _make_label(Vector2(0, 1029), Vector2(1908, 45), 24,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "Arrows/WASD or gamepad  •  R restart  •  N next  •  P pause  •  Esc menu"
+	hint_label.text = "P1 WASD+Shift / pad1  •  P2 Arrows+Ctrl / pad2  •  R restart  •  P pause  •  Esc menu"
 
 
+## Positions/sizes are authored in 1920x1080 design coordinates and scaled
+## to the actual viewport (split-screen views are halves or quadrants).
 func _make_label(pos: Vector2, size: Vector2, font_size: int,
 		align: HorizontalAlignment, color: Color) -> Label:
 	var l := Label.new()
-	l.position = pos
-	l.size = size
+	l.position = Vector2(pos.x * _kx, pos.y * _ky)
+	l.size = Vector2(size.x * _kx, size.y * _ky)
 	l.horizontal_alignment = align
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", maxi(10, int(font_size * _ky)))
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.add_theme_constant_override("outline_size", 12)
+	l.add_theme_constant_override("outline_size", maxi(4, int(12 * _ky)))
 	add_child(l)
 	return l
 
@@ -122,18 +131,18 @@ static func ordinal(n: int) -> String:
 
 func _make_leaderboard() -> void:
 	board_bg = ColorRect.new()
-	board_bg.position = Vector2(585, 180)
-	board_bg.size = Vector2(750, 720)
+	board_bg.position = Vector2(585 * _kx, 180 * _ky)
+	board_bg.size = Vector2(750 * _kx, 720 * _ky)
 	board_bg.color = Color(0.02, 0.02, 0.06, 0.82)
 	board_bg.visible = false
 	add_child(board_bg)
 	board_label = RichTextLabel.new()
-	board_label.position = Vector2(615, 204)
-	board_label.size = Vector2(690, 678)
+	board_label.position = Vector2(615 * _kx, 204 * _ky)
+	board_label.size = Vector2(690 * _kx, 678 * _ky)
 	board_label.bbcode_enabled = true
 	board_label.scroll_active = false
-	board_label.add_theme_font_size_override("normal_font_size", 36)
-	board_label.add_theme_font_size_override("bold_font_size", 36)
+	board_label.add_theme_font_size_override("normal_font_size", maxi(12, int(36 * _ky)))
+	board_label.add_theme_font_size_override("bold_font_size", maxi(12, int(36 * _ky)))
 	board_label.visible = false
 	add_child(board_label)
 
@@ -210,17 +219,22 @@ class TrackBar:
 	var cp_fractions: Array = []
 	var dots: Array = []
 	var player_p := 0.0
+	var k := 1.0   # viewport scale factor
 
 	func _draw() -> void:
 		var w := size.x
-		draw_rect(Rect2(0, 7.5, w, 3), Color(1, 1, 1, 0.35))
+		draw_rect(Rect2(0, 7.5 * k, w, 3 * k), Color(1, 1, 1, 0.35))
 		for f in cp_fractions:
-			draw_rect(Rect2(float(f) * w - 1.5, 1.5, 3, 15), Color(1, 1, 1, 0.6))
-		draw_rect(Rect2(w - 3.0, 0, 4.5, 18), Color(1, 0.9, 0.3, 0.9))
+			draw_rect(Rect2(float(f) * w - 1.5 * k, 1.5 * k, 3 * k, 15 * k),
+					Color(1, 1, 1, 0.6))
+		draw_rect(Rect2(w - 3.0 * k, 0, 4.5 * k, 18 * k), Color(1, 0.9, 0.3, 0.9))
 		for d in dots:
-			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 9.0), 4.5, d.color)
-		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 7.5, Color(0.1, 0.1, 0.1))
-		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 6.0, Color(1, 0.85, 0.2))
+			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 9.0 * k),
+					4.5 * k, d.color)
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0 * k),
+				7.5 * k, Color(0.1, 0.1, 0.1))
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0 * k),
+				6.0 * k, Color(1, 0.85, 0.2))
 
 
 ## Boost fuel gauge: dim track with a hot fill.

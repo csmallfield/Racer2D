@@ -149,6 +149,25 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Split screen (2 & 4 players)
+
+RACE and TIME TRIAL both ask for a player count. 2P stacks two full-width
+views; 4P is quadrants. Controls: **P1** WASD + Shift boost (or gamepad 1),
+**P2** Arrows + Ctrl boost (or gamepad 2), **P3/P4** gamepads 3/4 (A/RT
+accelerate, X/LT brake, left stick steer, B boost). Any Start pauses; Esc
+exits to the menu.
+
+Players are real cars in each other's worlds: you appear in the other
+screens in your livery color (P1 red, P2 blue, P3 green, P4 yellow), you
+collide, you draft each other's slipstream, rivals dodge and bonk off all
+of you, and boost canisters are first-come across everyone. Multiplayer
+drops the countdown timer — it's a pure race to the line; once the first
+player finishes the rest get a 20-second grace before DNF. Results boards
+show everyone; best times are recorded in solo only.
+
+Per-view draw distance scales down with player count to keep four
+renderers in budget (300/200/135 segments for 1/2/4 players).
+
 ## Tuning via resources
 
 Every gameplay tunable lives in editable `.tres` resources under

@@ -6,6 +6,7 @@ extends RefCounted
 
 ## All tunables live in resources/player_settings.tres (via GameConfig).
 var s: PlayerSettings = GameConfig.player
+var input_prefix := "p0_"   # per-player action prefix (split screen)
 
 
 func _init() -> void:
@@ -38,7 +39,7 @@ func update(dt: float, main: Node) -> bool:
 	var control := 1.0 if air <= s.air_threshold else s.air_control
 
 	# Analog on gamepads, -1/0/+1 on keyboard.
-	var steer := Input.get_axis("steer_left", "steer_right")
+	var steer := Input.get_axis(input_prefix + "steer_left", input_prefix + "steer_right")
 	x += dx * steer * control
 	steer_dir = steer
 
@@ -46,7 +47,7 @@ func update(dt: float, main: Node) -> bool:
 	x -= dx * speed_percent * seg.curve * s.centrifugal * control
 
 	# Boost: hold to burn fuel for straight-line speed. Ground only.
-	boosting = (Input.is_action_pressed("boost") and boost > 0.0
+	boosting = (Input.is_action_pressed(input_prefix + "boost") and boost > 0.0
 			and air <= s.air_threshold)
 	if boosting:
 		boost = maxf(0.0, boost - dt)
@@ -71,8 +72,8 @@ func update(dt: float, main: Node) -> bool:
 
 	# Analog triggers scale acceleration/braking; keys give full strength.
 	# Airborne: wheels can't push or brake — light air drag only.
-	var throttle := Input.get_action_strength("accelerate")
-	var brake_in := Input.get_action_strength("brake")
+	var throttle := Input.get_action_strength(input_prefix + "accelerate")
+	var brake_in := Input.get_action_strength(input_prefix + "brake")
 	if air > s.air_threshold:
 		speed += s.decel * 0.15 * dt
 	elif throttle > 0.0:
@@ -111,7 +112,7 @@ func update(dt: float, main: Node) -> bool:
 ## camera). Sampling at position_z made the car land on ground ~840 units
 ## behind what the eye sees.
 func _sprite_ground(main: Node) -> float:
-	return main.ground_y(position_z + main.renderer.player_z())
+	return main.ground_y(position_z + main.player_z())
 
 
 ## Vertical: ballistic with terrain contact. Grounded motion sets vy from

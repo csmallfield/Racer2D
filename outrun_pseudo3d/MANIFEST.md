@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v23
+# Delivery Manifest — outrun_pseudo3d v24
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -30,7 +30,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v23 adds the boost system: limited per-racer boost fuel (Shift / gamepad B) with +18% top speed and +100% accel but capped steering authority; camera shake + sound on ignition; contested boost canisters (level-authored via add_boost_pickup or auto-scattered), respawning, collectible by rivals too; rival boost AI (straights + attacking/sprinting, per-profile aggression ladder 0.25-0.9); HUD fuel gauge. All tunables in the .tres resources.
+v24 adds 2/4-player local split screen: SubViewport per player (uniform even solo) each with its own renderer, camera, and scale-aware HUD; per-player input actions (P1 WASD+Shift, P2 Arrows+Ctrl, P3/P4 pads); players mirrored as world car entities so player-vs-player collisions, mutual slipstream, and AI avoidance reuse the traffic code paths; player liveries + progress-bar markers; MP drops the countdown timer (pure race, 20s finish grace, merged results boards); per-view draw distance scaling; records solo-only.
+
+Previously: v23 adds the boost system: limited per-racer boost fuel (Shift / gamepad B) with +18% top speed and +100% accel but capped steering authority; camera shake + sound on ignition; contested boost canisters (level-authored via add_boost_pickup or auto-scattered), respawning, collectible by rivals too; rival boost AI (straights + attacking/sprinting, per-profile aggression ladder 0.25-0.9); HUD fuel gauge. All tunables in the .tres resources.
 
 Previously: v22 is the resource refactor: all tunables move to editable .tres resources (player_settings, camera_settings, race_settings + 9 per-rival profiles with name/color/cruise/lane/optional car art) loaded via a GameConfig autoload with script-default fallbacks. Rivals are roster-driven (VIPER now genuinely on pole at 1.0 cruise, matching the docs). Base resolution moves to 1920x1080 with the HUD/menu re-laid-out to match (renderer was already resolution-independent).
 

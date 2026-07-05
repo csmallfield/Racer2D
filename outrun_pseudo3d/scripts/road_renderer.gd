@@ -21,6 +21,9 @@ const LANES := 3
 var cs: CameraSettings = GameConfig.camera
 
 var main: Node2D                 # set by main.gd
+var player: PlayerCar            # the player this view's camera follows
+var draw_distance: int = GameConfig.camera.draw_distance   # per-view (split screen shrinks it)
+var player_index := 0            # which player_N sprite to draw locally
 var camera_depth: float = 1.0 / tan(deg_to_rad(cs.fov_deg * 0.5))
 var hill_offset := 0.0           # background parallax scroll (driven by main)
 var last_cam_y := 0.0            # camera altitude this frame (projects the player)
@@ -98,7 +101,7 @@ func _project(p: Dictionary, cam_x: float, cam_y: float, cam_z: float, w: float,
 
 
 func _fog_amount(n: int) -> float:
-	var d := float(n) / float(cs.draw_distance)
+	var d := float(n) / float(draw_distance)
 	return 1.0 - 1.0 / exp(d * d * cs.fog_density)
 
 
@@ -108,7 +111,7 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	var seg_count := segments.size()
 	var seg_len: float = TrackBuilder.SEGMENT_LENGTH
 	var track_len: float = track.track_length()
-	var player: PlayerCar = main.player
+	var player: PlayerCar = player
 	var th: Dictionary = main.level.theme
 
 	var base: Dictionary = main.find_segment(player.position_z)
@@ -136,7 +139,7 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	var dx: float = -(base.curve * base_percent)
 	var apron_drawn := false
 
-	for n in range(cs.draw_distance):
+	for n in range(draw_distance):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
 		seg.looped = seg.index < base.index
 		seg.clip = maxy
@@ -159,12 +162,14 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 		maxy = seg.p2.screen.y
 
 	# --- Pass 2: sprites and cars, back to front (painter's algorithm). ---
-	for n in range(cs.draw_distance - 1, 0, -1):
+	for n in range(draw_distance - 1, 0, -1):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
 		var fog := _fog_amount(n)
 		var fog_mod := Color.WHITE.lerp(th.fog, fog * 0.8)
 
 		for car in seg.cars:
+			if int(car.get("pidx", -1)) == player_index:
+				continue   # this view's own player is drawn locally
 			var percent := fposmod(car.z, seg_len) / seg_len
 			var sc := lerpf(seg.p1.screen.scale, seg.p2.screen.scale, percent)
 			var sx: float = lerpf(seg.p1.screen.x, seg.p2.screen.x, percent) \
@@ -328,8 +333,8 @@ func _draw_sprite(sprite_name: String, scale_factor: float, x: float, y: float,
 # === PLAYER ===
 
 func _draw_player(w: float, h: float) -> void:
-	var player: PlayerCar = main.player
-	var def: Dictionary = SpriteCatalog.get_def("player")
+	var player: PlayerCar = player
+	var def: Dictionary = SpriteCatalog.get_def("player_%d" % player_index)
 	var sc := 1.0 / cs.height   # projection scale at the player's z
 	var dw: float = def.world_w * sc * w * 0.5
 	var dh: float = def.world_h * sc * w * 0.5

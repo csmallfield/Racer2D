@@ -139,6 +139,25 @@ static func register_rival(index: int, profile: RivalProfile) -> void:
 	}
 
 
+## Per-player liveries for split screen: player_0..player_3 share the
+## player car's world size; colors are fixed (P1 red, P2 blue, P3 green,
+## P4 yellow) and drive both the sprite and progress-bar markers.
+const PLAYER_COLORS: Array[Color] = [
+	Color(0.85, 0.12, 0.12), Color(0.15, 0.35, 0.95),
+	Color(0.1, 0.8, 0.3), Color(0.95, 0.85, 0.1),
+]
+
+
+static func register_player(index: int) -> void:
+	get_def("player")
+	var color := PLAYER_COLORS[index % PLAYER_COLORS.size()]
+	_cache["player_%d" % index] = {
+		"texture": _make_car(color),
+		"world_w": 520.0, "world_h": 300.0, "collidable": true,
+		"map_color": color,
+	}
+
+
 static func _make_rival(body: Color) -> ImageTexture:
 	var tex := _make_car(body)
 	var img := tex.get_image()
