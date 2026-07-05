@@ -149,6 +149,17 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Settings & retro filter
+
+SETTINGS (main menu) covers fullscreen, music/SFX volume, and the **retro
+screen filter**: a custom full-resolution shader layered over everything —
+luminance-preserving scanlines, chromatic color fringe, animated VHS grain
+with a subtle flicker, vignette, and optional barrel distortion. Nothing is
+downscaled; it's your 1080p image wearing the period costume. Every look
+parameter is adjustable live from the menu (left/right to tune, applied
+instantly) and persists to `user://settings.json`. The shader itself is
+`assets/shaders/retro_screen.gdshader` if you want to go deeper.
+
 ## Split screen (2 & 4 players)
 
 RACE and TIME TRIAL both ask for a player count. 2P stacks two full-width

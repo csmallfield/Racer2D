@@ -35,10 +35,16 @@ var _music_name := ""
 
 
 func _ready() -> void:
+	# Music gets its own bus so its volume is adjustable independently of SFX
+	# (which ride the Master bus).
+	var idx := AudioServer.bus_count
+	AudioServer.add_bus(idx)
+	AudioServer.set_bus_name(idx, "Music")
 	_engine_player = _make_player()
 	_offroad_player = _make_player()
 	_music_player = _make_player()
 	_music_player.volume_db = MUSIC_VOLUME_DB
+	_music_player.bus = "Music"
 	for i in range(ONESHOT_POOL_SIZE):
 		_oneshot_pool.append(_make_player())
 
@@ -97,6 +103,12 @@ func play_music(music_name: String) -> void:
 ## True if a stream exists on disk for this sound name.
 func has_sound(sound_name: String) -> bool:
 	return _find_stream(sound_name) != null
+
+
+## 0..1 linear music volume (Settings menu), on the dedicated Music bus.
+func set_music_volume(linear: float) -> void:
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"),
+			linear_to_db(maxf(linear, 0.0001)))
 
 
 func stop_music() -> void:

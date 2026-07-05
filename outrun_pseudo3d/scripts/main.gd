@@ -10,10 +10,23 @@ const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
 const MP_FINISH_GRACE := 20.0   # after the first finish, others get this long
 const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 
-enum State { MENU, PLAYER_SELECT, LEVEL_SELECT, LEADERBOARD, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+enum State { MENU, PLAYER_SELECT, LEVEL_SELECT, LEADERBOARD, SETTINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 enum Mode { RACE, TIME_TRIAL }
 
-const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "QUIT"]
+const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "SETTINGS", "QUIT"]
+
+## Settings rows: {label, property (on the Settings autoload), type, step, min, max}
+const SETTINGS_ROWS: Array = [
+	{"label": "FULLSCREEN", "prop": "fullscreen", "type": "bool"},
+	{"label": "MUSIC VOLUME", "prop": "music_volume", "type": "pct", "step": 0.1},
+	{"label": "SFX VOLUME", "prop": "sfx_volume", "type": "pct", "step": 0.1},
+	{"label": "RETRO FILTER", "prop": "crt_enabled", "type": "bool"},
+	{"label": "  SCANLINES", "prop": "crt_scanlines", "type": "float", "step": 0.05, "min": 0.0, "max": 0.8},
+	{"label": "  COLOR FRINGE", "prop": "crt_fringe", "type": "float", "step": 0.2, "min": 0.0, "max": 5.0},
+	{"label": "  DISTORTION", "prop": "crt_curvature", "type": "float", "step": 0.01, "min": 0.0, "max": 0.2},
+	{"label": "  VIGNETTE", "prop": "crt_vignette", "type": "float", "step": 0.05, "min": 0.0, "max": 0.8},
+	{"label": "  NOISE", "prop": "crt_noise", "type": "float", "step": 0.01, "min": 0.0, "max": 0.25},
+]
 const PLAYER_ITEMS: Array[String] = ["1 PLAYER", "2 PLAYERS", "4 PLAYERS"]
 const PLAYER_COUNTS: Array[int] = [1, 2, 4]
 
@@ -396,6 +409,8 @@ func _process(dt: float) -> void:
 			_level_select_frame(dt)
 		State.LEADERBOARD:
 			_leaderboard_frame(dt)
+		State.SETTINGS:
+			_settings_frame(dt)
 		State.COUNTDOWN:
 			_countdown_frame(dt)
 		State.RUNNING:
@@ -464,6 +479,10 @@ func _menu_frame(dt: float) -> void:
 				select_sel = 0
 				_refresh_board()
 			3:
+				state = State.SETTINGS
+				menu_sel = 0
+				_show_settings()
+			4:
 				get_tree().quit()
 
 
@@ -496,6 +515,66 @@ func _player_select_frame(dt: float) -> void:
 	elif Input.is_action_just_pressed("ui_cancel"):
 		Audio.play("menu_move")
 		_enter_menu()
+
+
+## Settings screen: up/down select, left/right adjust (applied live),
+## Esc saves and returns.
+func _settings_frame(dt: float) -> void:
+	_update_traffic(dt)
+	var moved := 0
+	if Input.is_action_just_pressed("ui_down"):
+		moved = 1
+	elif Input.is_action_just_pressed("ui_up"):
+		moved = -1
+	if moved != 0:
+		menu_sel = wrapi(menu_sel + moved, 0, SETTINGS_ROWS.size())
+		Audio.play("menu_move")
+		_show_settings()
+	var adj := 0
+	if (Input.is_action_just_pressed("ui_right")
+			or Input.is_action_just_pressed("p0_steer_right")):
+		adj = 1
+	elif (Input.is_action_just_pressed("ui_left")
+			or Input.is_action_just_pressed("p0_steer_left")):
+		adj = -1
+	if adj != 0 or Input.is_action_just_pressed("ui_accept"):
+		if adj == 0:
+			adj = 1   # accept toggles/steps forward
+		_adjust_setting(SETTINGS_ROWS[menu_sel], adj)
+		Audio.play("menu_move")
+		Settings.apply()
+		_show_settings()
+	if Input.is_action_just_pressed("ui_cancel"):
+		Audio.play("menu_select")
+		Settings.save()
+		_enter_menu()
+
+
+func _adjust_setting(row: Dictionary, dir: int) -> void:
+	var prop: String = row.prop
+	match String(row.type):
+		"bool":
+			Settings.set(prop, not bool(Settings.get(prop)))
+		"pct", "float":
+			var v: float = float(Settings.get(prop)) + float(row.step) * float(dir)
+			var lo: float = float(row.get("min", 0.0))
+			var hi: float = float(row.get("max", 1.0))
+			Settings.set(prop, clampf(v, lo, hi))
+
+
+func _show_settings() -> void:
+	var rows: Array[String] = []
+	for row in SETTINGS_ROWS:
+		var val: String
+		match String(row.type):
+			"bool":
+				val = "ON" if bool(Settings.get(row.prop)) else "OFF"
+			"pct":
+				val = "%d%%" % int(round(float(Settings.get(row.prop)) * 100.0))
+			_:
+				val = "%.2f" % float(Settings.get(row.prop))
+		rows.append("%s   %s" % [row.label, val])
+	menu.show_list("SETTINGS", rows, menu_sel)
 
 
 func _mode_name() -> String:
