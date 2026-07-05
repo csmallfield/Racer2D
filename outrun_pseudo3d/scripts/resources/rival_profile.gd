@@ -15,3 +15,10 @@ extends Resource
 ## Optional sprite art. Leave empty to generate a placeholder in `color`
 ## with a racing stripe. World size stays 510x295 units.
 @export var car_texture: Texture2D
+
+@export_group("Boost")
+@export var boost_capacity := 3.0
+## Willingness to burn boost (0 = hoards it, 1 = fires at every opening).
+## Governs how quickly they take valid opportunities: straights while
+## attacking the player or sprinting for the line.
+@export_range(0.0, 1.0) var boost_aggression := 0.5

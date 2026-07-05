@@ -33,3 +33,17 @@ extends Resource
 
 @export_group("Presentation")
 @export var flash_range := 2500.0       # overtakes flash only when nearby
+
+@export_group("Boost AI")
+## Rivals only boost when |curve| is at or below this severity.
+@export var boost_curve_threshold := 1.0
+## Behind the player and within this range counts as an attack opportunity.
+@export var boost_attack_range := 6000.0
+## Past this fraction of the track everyone sprints for the line.
+@export var final_sprint_fraction := 0.85
+
+@export_group("Pickups")
+@export var pickup_boost_amount := 1.5  # seconds of boost per canister
+@export var pickup_respawn := 15.0      # seconds until a taken canister returns
+## Random canisters scattered when a level defines none of its own.
+@export var auto_pickup_count := 6

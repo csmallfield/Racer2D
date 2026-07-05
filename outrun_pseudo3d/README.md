@@ -194,6 +194,14 @@ sling past. Stay tucked too long and you'll rear-end them. This is your
 deliberate passing tool against rivals who match your top speed; rivals
 don't get it.
 
+**Boost**: every racer carries limited boost fuel (Shift / gamepad B; the
+orange gauge bottom-left). It raises top speed and acceleration but grants
+zero extra steering — and centrifugal force scales with your real speed, so
+corners punish it twice. Burn it on straights and passes. Glowing canisters
+on the track refill it, first racer through takes them (they respawn after
+a while); rivals contest them and burn their own fuel per personality —
+`boost_aggression` in each profile. Camera kicks on ignition.
+
 **Progress bar**: the strip along the bottom maps the whole track —
 checkpoint ticks, gold finish tick at the end, rival dots in their livery
 colors, and your larger gold marker. In time trial it's just you against

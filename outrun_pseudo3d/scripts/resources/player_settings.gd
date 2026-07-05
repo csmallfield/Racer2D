@@ -27,3 +27,8 @@ extends Resource
 @export var slip_build_time := 0.6      # seconds to reach full effect
 @export var slip_top_bonus := 0.05      # +top speed at full slipstream
 @export var slip_accel_bonus := 0.8     # +acceleration at full slipstream
+
+@export_group("Boost")
+@export var boost_capacity := 3.0       # seconds of boost carried (full at the grid)
+@export var boost_top_bonus := 0.18     # +top speed while boosting
+@export var boost_accel_bonus := 1.0    # +acceleration while boosting

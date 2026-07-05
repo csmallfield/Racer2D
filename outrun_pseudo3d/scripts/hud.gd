@@ -17,6 +17,7 @@ var board_bg: ColorRect
 var board_label: RichTextLabel
 var _flash_t := 0.0
 var track_bar: TrackBar
+var boost_bar: BoostBar
 
 
 func _ready() -> void:
@@ -34,6 +35,11 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
 	race_time_label = _make_label(Vector2(0, 108), Vector2(1920, 45), 30,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
+	boost_bar = BoostBar.new()
+	boost_bar.position = Vector2(36, 940)
+	boost_bar.size = Vector2(300, 21)
+	boost_bar.visible = false
+	add_child(boost_bar)
 	track_bar = TrackBar.new()
 	track_bar.position = Vector2(360, 993)
 	track_bar.size = Vector2(1200, 18)
@@ -81,6 +87,7 @@ func clear_race_ui() -> void:
 	flash_label.text = ""
 	_flash_t = 0.0
 	hide_progress()
+	boost_bar.visible = false
 
 
 func set_position_rank(rank: int, total: int) -> void:
@@ -170,6 +177,12 @@ static func format_time(t: float) -> String:
 
 ## Show the progress bar for a new race. cp_fractions: checkpoint positions
 ## as 0..1 along the track.
+func set_boost(frac: float) -> void:
+	boost_bar.visible = true
+	boost_bar.frac = clampf(frac, 0.0, 1.0)
+	boost_bar.queue_redraw()
+
+
 func setup_progress(cp_fractions: Array) -> void:
 	track_bar.cp_fractions = cp_fractions
 	track_bar.player_p = 0.0
@@ -208,3 +221,17 @@ class TrackBar:
 			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 9.0), 4.5, d.color)
 		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 7.5, Color(0.1, 0.1, 0.1))
 		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 6.0, Color(1, 0.85, 0.2))
+
+
+## Boost fuel gauge: dim track with a hot fill.
+class BoostBar:
+	extends Control
+
+	var frac := 0.0
+
+	func _draw() -> void:
+		draw_rect(Rect2(0, 0, size.x, size.y), Color(0, 0, 0, 0.45))
+		if frac > 0.0:
+			draw_rect(Rect2(2, 2, (size.x - 4.0) * frac, size.y - 4.0),
+					Color(1.0, 0.55, 0.05))
+		draw_rect(Rect2(0, 0, size.x, size.y), Color(1, 1, 1, 0.5), false, 2.0)

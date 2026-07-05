@@ -57,6 +57,10 @@ func spawn(main: Node2D, count: int) -> void:
 			"next_cp": 0,          # index of the next checkpoint to cross
 			"finish_time": -1.0,   # race clock at the finish line, -1 = racing
 			"y": main.ground_y(cfg.grid_gap * float(i + 1)), "vy": 0.0, "air": 0.0,
+			"boost": profile.boost_capacity,
+			"boost_cap": profile.boost_capacity,
+			"boosting": false,
+			"aggression": profile.boost_aggression,
 			"was_ahead": true,
 			"finished": false,
 		}
@@ -89,6 +93,24 @@ func update(dt: float, main: Node2D) -> void:
 			target *= cfg.rubber_ahead
 		elif gap < -cfg.rubber_range:
 			target = minf(target * cfg.rubber_behind, GameConfig.player.max_speed * 0.99)
+
+		# --- Boost policy: burn fuel on straights while attacking the
+		# player from behind or sprinting for the line. Aggression sets
+		# how quickly a rival takes a valid opening (applied AFTER the
+		# rubber clamp — boost genuinely exceeds normal ceilings).
+		var straight := absf(float(old_seg.curve)) <= cfg.boost_curve_threshold
+		if bool(r.boosting):
+			if not straight or float(r.boost) <= 0.0:
+				r.boosting = false
+		elif straight and float(r.boost) > 0.4 and float(r.air) < 10.0:
+			var sprinting := float(r.z) > track_len * cfg.final_sprint_fraction
+			var attacking := gap < 0.0 and gap > -cfg.boost_attack_range
+			if (sprinting or attacking) \
+					and randf() < float(r.aggression) * dt * 2.0:
+				r.boosting = true
+		if bool(r.boosting):
+			r.boost = maxf(0.0, float(r.boost) - dt)
+			target *= 1.0 + GameConfig.player.boost_top_bonus
 
 		# Don't ghost through the player: right behind and overlapping,
 		# a faster rival tucks in until the dodge AI finds a way around.
@@ -129,6 +151,15 @@ func update(dt: float, main: Node2D) -> void:
 		if old_seg.index != new_seg.index:
 			old_seg.cars.erase(r)
 			new_seg.cars.append(r)
+
+		# --- Boost pickups: first racer through takes it. ---
+		for pu in new_seg.pickups:
+			if not bool(pu.taken) \
+					and absf(float(pu.offset) - float(r.offset)) < 0.45:
+				pu.taken = true
+				pu.respawn_t = cfg.pickup_respawn
+				r.boost = minf(float(r.boost) + cfg.pickup_boost_amount,
+						float(r.boost_cap))
 
 		# --- Bonk: a dodge that failed. Hitting slow traffic hurts. ---
 		# Only near the player: beyond the dodge AI's active range rivals

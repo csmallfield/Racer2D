@@ -11,3 +11,5 @@ fog_density = 5.0
 aesthetic_lift = 0.08
 aim_strength = 0.5
 aim_delay = 0.2
+shake_strength = 9.0
+shake_time = 0.35

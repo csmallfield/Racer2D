@@ -70,6 +70,7 @@ func _add_segment(curve: float, y: float) -> void:
 		"looped": false,
 		"color": int(i / float(RUMBLE_LENGTH)) % 2,   # alternate light/dark stripes
 		"special": "",
+		"pickups": [],
 	})
 
 
@@ -130,6 +131,16 @@ func add_downhill_to_end(n: int = 200) -> void:
 
 
 # === SCENERY & SPRITES ===
+
+## A boost canister on the road, collectible by any racer (first come).
+## Levels can place them deliberately; stages that place none get a random
+## scatter (RaceSettings.auto_pickup_count).
+func add_boost_pickup(seg_index: int, offset: float) -> void:
+	if seg_index < 0 or seg_index >= segments.size():
+		return
+	segments[seg_index].pickups.append(
+			{"offset": offset, "taken": false, "respawn_t": 0.0})
+
 
 func add_sprite(seg_index: int, sprite_name: String, offset: float) -> void:
 	if seg_index < 0 or seg_index >= segments.size():

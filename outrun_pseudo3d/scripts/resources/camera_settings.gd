@@ -14,3 +14,7 @@ extends Resource
 ## exponential smoothing time constant).
 @export_range(0.0, 1.0) var aim_strength := 0.5
 @export var aim_delay := 0.2
+
+@export_group("Shake")
+@export var shake_strength := 9.0       # boost-ignition shake amplitude (px)
+@export var shake_time := 0.35          # shake duration (s), decaying

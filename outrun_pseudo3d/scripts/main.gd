@@ -40,6 +40,8 @@ var player_finish_time := 0.0   # race clock when the player crossed the line
 var _board_title := ""          # frozen at the player's finish
 var _last_beep_second := -1     # last whole second a time_warning beep fired
 var _prev_air := 0.0            # player air last frame (landing detection)
+var _prev_boosting := false     # boost rising-edge detection (shake + sound)
+var pickups: Array = []         # all boost canisters on the current track
 
 
 func _ready() -> void:
@@ -97,6 +99,7 @@ func _load_level(idx: int) -> void:
 
 	renderer.reset_camera()
 	cp_zs = track.mark_checkpoints(level.checkpoint_count)
+	_init_pickups()
 	section_time = level.time_limit / float(level.checkpoint_count + 1)
 	player_next_cp = 0
 	race_time = 0.0
@@ -214,6 +217,25 @@ func ground_y(z: float) -> float:
 	var seg := find_segment(z)
 	var t := fposmod(z, TrackBuilder.SEGMENT_LENGTH) / TrackBuilder.SEGMENT_LENGTH
 	return lerpf(seg.p1.world.y, seg.p2.world.y, t)
+
+
+## Gather level-authored boost canisters; if the level placed none,
+## scatter a random set (avoiding the grid and the final run-in).
+func _init_pickups() -> void:
+	pickups.clear()
+	for seg in track.segments:
+		for pu in seg.pickups:
+			pickups.append(pu)
+	if not pickups.is_empty():
+		return
+	var count: int = GameConfig.race.auto_pickup_count
+	var lanes: Array = [-0.66, 0.0, 0.66]
+	var seg_count := track.segments.size()
+	for i in range(count):
+		var frac := (float(i) + randf_range(0.25, 0.75)) / float(count)
+		var idx := clampi(int(frac * float(seg_count)), 30, seg_count - 40)
+		track.add_boost_pickup(idx, lanes.pick_random())
+		pickups.append(track.segments[idx].pickups[-1])
 
 
 func _spawn_traffic() -> void:
@@ -424,6 +446,29 @@ func _run_frame(dt: float) -> void:
 	# Slipstream whoosh as the tow reaches full strength.
 	if player.slip > 0.9:
 		Audio.play("slipstream", -4.0, 1.0, 1.5)
+
+	# Boost ignition: camera shake + sound on the rising edge.
+	if player.boosting and not _prev_boosting:
+		renderer.shake()
+		Audio.play("boost", -3.0, 1.0, 0.3)
+	_prev_boosting = player.boosting
+	hud.set_boost(player.boost / GameConfig.player.boost_capacity)
+
+	# Boost canisters: respawn timers, and collection at the player's car.
+	for pu in pickups:
+		if bool(pu.taken):
+			pu.respawn_t = float(pu.respawn_t) - dt
+			if float(pu.respawn_t) <= 0.0:
+				pu.taken = false
+	var pseg := find_segment(player.position_z + renderer.player_z())
+	for pu in pseg.pickups:
+		if not bool(pu.taken) and player.air < 120.0 \
+				and absf(float(pu.offset) - player.x) < 0.4:
+			pu.taken = true
+			pu.respawn_t = GameConfig.race.pickup_respawn
+			player.boost = minf(player.boost + GameConfig.race.pickup_boost_amount,
+					GameConfig.player.boost_capacity)
+			Audio.play("pickup", -2.0)
 
 	# Landing thud after real air.
 	if _prev_air > 200.0 and player.air <= 0.5:

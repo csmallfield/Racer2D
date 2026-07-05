@@ -21,3 +21,6 @@ slip_min_speed = 0.5
 slip_build_time = 0.6
 slip_top_bonus = 0.05
 slip_accel_bonus = 0.8
+boost_capacity = 3.0
+boost_top_bonus = 0.18
+boost_accel_bonus = 1.0

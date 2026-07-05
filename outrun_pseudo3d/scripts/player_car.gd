@@ -7,6 +7,10 @@ extends RefCounted
 ## All tunables live in resources/player_settings.tres (via GameConfig).
 var s: PlayerSettings = GameConfig.player
 
+
+func _init() -> void:
+	boost = s.boost_capacity
+
 var position_z := 0.0     # distance along the track (world units)
 var x := 0.0              # lateral position, -1..1 = on road
 var speed := 0.0
@@ -16,14 +20,19 @@ var slip := 0.0           # slipstream strength 0..1 (read by main for audio)
 var y_pos := 0.0          # absolute altitude (world units)
 var vy := 0.0             # vertical velocity
 var air := 0.0            # height above the road; > 0 while airborne
+var boost := 0.0          # boost seconds remaining (filled at spawn)
+var boosting := false     # true while the boost button is down with fuel
 
 
 ## Advances the player one frame. Returns true if the finish line was crossed.
 func update(dt: float, main: Node) -> bool:
 	var seg: Dictionary = main.find_segment(position_z)
 	var speed_percent := speed / s.max_speed
-	# At full speed you can cross the whole road in ~1 second.
-	var dx := dt * 2.0 * speed_percent
+	# Steering authority is capped at normal top speed: boost overspeed
+	# gives NO extra turning, while centrifugal force below scales with the
+	# real speed — corners punish boosting twice. Straights and passing are
+	# where it pays.
+	var dx := dt * 2.0 * minf(speed_percent, 1.0)
 
 	# Wheels off the ground: barely any steering, no centrifugal grip.
 	var control := 1.0 if air <= s.air_threshold else s.air_control
@@ -35,6 +44,12 @@ func update(dt: float, main: Node) -> bool:
 
 	# Centrifugal force: curves push the car toward the outside.
 	x -= dx * speed_percent * seg.curve * s.centrifugal * control
+
+	# Boost: hold to burn fuel for straight-line speed. Ground only.
+	boosting = (Input.is_action_pressed("boost") and boost > 0.0
+			and air <= s.air_threshold)
+	if boosting:
+		boost = maxf(0.0, boost - dt)
 
 	# Slipstream detection: another car ahead within the tow range and
 	# roughly in our lane. Strength eases in/out over s.slip_build_time.
@@ -50,7 +65,9 @@ func update(dt: float, main: Node) -> bool:
 			if in_stream:
 				break
 	slip = move_toward(slip, 1.0 if in_stream else 0.0, dt / s.slip_build_time)
-	var slip_max := s.max_speed * (1.0 + s.slip_top_bonus * slip)
+	var boost_f := 1.0 if boosting else 0.0
+	var allowed_max := s.max_speed * (1.0 + s.slip_top_bonus * slip
+			+ s.boost_top_bonus * boost_f)
 
 	# Analog triggers scale acceleration/braking; keys give full strength.
 	# Airborne: wheels can't push or brake — light air drag only.
@@ -59,7 +76,8 @@ func update(dt: float, main: Node) -> bool:
 	if air > s.air_threshold:
 		speed += s.decel * 0.15 * dt
 	elif throttle > 0.0:
-		speed += s.accel * (1.0 + s.slip_accel_bonus * slip) * dt * throttle
+		speed += s.accel * (1.0 + s.slip_accel_bonus * slip
+				+ s.boost_accel_bonus * boost_f) * dt * throttle
 	elif brake_in > 0.0:
 		speed += s.braking * dt * brake_in
 	else:
@@ -76,9 +94,9 @@ func update(dt: float, main: Node) -> bool:
 
 	x = clampf(x, -2.5, 2.5)
 	speed = maxf(speed, 0.0)
-	if speed > slip_max:
-		# Overspeed from a fading slipstream bleeds off instead of snapping.
-		speed = move_toward(speed, slip_max, s.max_speed * 0.6 * dt)
+	if speed > allowed_max:
+		# Overspeed from fading slipstream/boost bleeds off instead of snapping.
+		speed = move_toward(speed, allowed_max, s.max_speed * 0.6 * dt)
 
 	var track_len: float = main.track.track_length()
 	var g_prev := _sprite_ground(main)

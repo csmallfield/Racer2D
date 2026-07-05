@@ -51,5 +51,10 @@ func build(b: TrackBuilder) -> void:
 	b.add_scenery("rock", 13, end, 11, -1.0, 1.3, 2.4)
 	b.add_scenery("tree", 30, end, 21, 1.0, 1.6, 2.6)
 	b.add_scenery("tree", 44, end, 23, -1.0, 1.6, 2.6)
+	# Boost canisters rewarding the brave lines: one at the base of the
+	# monster climb, one floating over the sharp-crest jump.
+	b.add_boost_pickup(int(b.segments.size() * 0.52), 0.0)
+	b.add_boost_pickup(int(b.segments.size() * 0.28), -0.5)
+	b.add_boost_pickup(int(b.segments.size() * 0.8), 0.5)
 	b.add_sprite(24, "sign", -1.3)
 	b.add_sprite(24, "sign", 1.3)

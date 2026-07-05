@@ -8,3 +8,5 @@ display_name = "AXEL"
 color = Color(0.95, 0.8, 0.1, 1)
 cruise_fraction = 0.93
 preferred_lane = -0.45
+boost_capacity = 3.0
+boost_aggression = 0.55

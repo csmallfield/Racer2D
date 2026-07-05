@@ -25,6 +25,7 @@ var camera_depth: float = 1.0 / tan(deg_to_rad(cs.fov_deg * 0.5))
 var hill_offset := 0.0           # background parallax scroll (driven by main)
 var last_cam_y := 0.0            # camera altitude this frame (projects the player)
 var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
+var _shake_t := 0.0              # boost-ignition camera shake remaining
 
 
 ## Distance from camera to the player car along z.
@@ -33,7 +34,18 @@ func player_z() -> float:
 
 
 func _process(_delta: float) -> void:
+	if _shake_t > 0.0:
+		_shake_t = maxf(0.0, _shake_t - _delta)
+		var a := cs.shake_strength * (_shake_t / maxf(cs.shake_time, 0.001))
+		position = Vector2(randf_range(-a, a), randf_range(-a, a))
+	elif position != Vector2.ZERO:
+		position = Vector2.ZERO
 	queue_redraw()
+
+
+## Kick the boost-ignition camera shake.
+func shake() -> void:
+	_shake_t = cs.shake_time
 
 
 func _draw() -> void:
@@ -160,6 +172,17 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 			var sy := lerpf(seg.p1.screen.y, seg.p2.screen.y, percent)
 			var air_px: float = minf(float(car.air) * sc * h * 0.5, h * 0.35)
 			_draw_sprite(car.sprite, sc, sx, sy, seg.clip, w, fog_mod, air_px)
+
+		for pu in seg.pickups:
+			if bool(pu.taken):
+				continue
+			var psc: float = seg.p1.screen.scale
+			var px: float = seg.p1.screen.x \
+					+ psc * float(pu.offset) * ROAD_WIDTH * w * 0.5
+			var hover: float = 150.0 + sin(Time.get_ticks_msec() * 0.004
+					+ float(seg.index)) * 60.0
+			var py: float = seg.p1.screen.y - hover * psc * h * 0.5
+			_draw_sprite("boost_pickup", psc, px, py, seg.clip, w, fog_mod)
 
 		for spr in seg.sprites:
 			var sc: float = seg.p1.screen.scale

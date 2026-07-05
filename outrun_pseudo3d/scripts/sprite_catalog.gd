@@ -44,6 +44,10 @@ static func _build_all() -> void:
 		"texture": _make_car(Color(0.15, 0.6, 0.3)),
 		"world_w": 500.0, "world_h": 290.0, "collidable": true,
 	}
+	_cache["boost_pickup"] = {
+		"texture": _make_boost_canister(),
+		"world_w": 240.0, "world_h": 300.0, "collidable": false,
+	}
 	_cache["tree"] = {
 		"texture": _make_tree(Color(0.09, 0.42, 0.16), Color(0.35, 0.22, 0.1)),
 		"world_w": 1300.0, "world_h": 2300.0, "collidable": true,
@@ -162,6 +166,16 @@ static func _make_streetlight() -> ImageTexture:
 	img.fill_rect(Rect2i(6, 8, 5, 88), pole)
 	img.fill_rect(Rect2i(6, 8, 34, 4), pole)
 	img.fill_rect(Rect2i(34, 12, 10, 6), Color(1.0, 0.92, 0.6))
+	return _to_texture(img)
+
+
+## Glowing boost canister — bright, unmistakable, hovers over the road.
+static func _make_boost_canister() -> ImageTexture:
+	var img := _new_image(48, 60)
+	img.fill_rect(Rect2i(10, 8, 28, 46), Color(1.0, 0.55, 0.05))
+	img.fill_rect(Rect2i(14, 12, 20, 38), Color(1.0, 0.8, 0.2))
+	img.fill_rect(Rect2i(18, 0, 12, 10), Color(0.85, 0.9, 0.95))
+	img.fill_rect(Rect2i(20, 20, 8, 22), Color(1.0, 0.98, 0.85))
 	return _to_texture(img)
 
 

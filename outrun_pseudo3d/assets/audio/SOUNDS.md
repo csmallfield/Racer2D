@@ -36,6 +36,8 @@ who name none) pick a random existing stage track at each race start.
 | `countdown_beep` | Short low blip for the 3…2…1 pre-race countdown (plays three times). |
 | `countdown_go` | Higher, punchier "GO!" tone as the race starts. |
 | `checkpoint` | Bright chime when crossing a checkpoint stripe. |
+| `boost` | Nitro ignition — a punchy whoosh/thump when boost fires (0.3 s cooldown). |
+| `pickup` | Bright collect blip when grabbing a boost canister. |
 | `land` | Suspension thud when the car lands after real air time (mountain crests). |
 | `slipstream` | Soft airy whoosh when the slipstream tow reaches full strength (tucked close behind another car at speed). |
 | `stage_clear` | Short victory jingle, 1–3 s, plays once at the finish line. |
