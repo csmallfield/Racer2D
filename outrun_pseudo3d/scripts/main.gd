@@ -200,12 +200,12 @@ func _update_progress_bar() -> void:
 ## inside PlayerCar.update.)
 func _step_air(car: Dictionary, g_prev: float, dt: float) -> void:
 	var g_new := ground_y(float(car.z))
-	car.vy = float(car.vy) - PlayerCar.GRAVITY * dt
+	car.vy = float(car.vy) - GameConfig.player.gravity * dt
 	car.y = float(car.y) + float(car.vy) * dt
 	if float(car.y) <= g_new:
 		car.y = g_new
 		car.vy = minf(maxf(float(car.vy), (g_new - g_prev) / maxf(dt, 0.0001)),
-				PlayerCar.MAX_LAUNCH_VY)
+				GameConfig.player.max_launch_vy)
 	car.air = float(car.y) - g_new
 
 
@@ -227,7 +227,7 @@ func _spawn_traffic() -> void:
 		var car := {
 			"z": z,
 			"offset": lane_offsets.pick_random(),
-			"speed": PlayerCar.MAX_SPEED * randf_range(0.12, 0.5),
+			"speed": GameConfig.player.max_speed * randf_range(0.12, 0.5),
 			"sprite": sprite_names.pick_random(),
 			"y": ground_y(z), "vy": 0.0, "air": 0.0,   # vertical state
 		}
@@ -284,7 +284,7 @@ func _process(dt: float) -> void:
 			_run_frame(dt)
 		State.STAGE_CLEAR:
 			race_time += dt   # late finishers still get real times
-			_coast_frame(dt, PlayerCar.MAX_SPEED * 0.35)
+			_coast_frame(dt, GameConfig.player.max_speed * 0.35)
 			if mode == Mode.RACE:
 				hud.show_leaderboard(rivals.board_entries(player_finish_time),
 						_board_title)
@@ -431,7 +431,7 @@ func _run_frame(dt: float) -> void:
 	_prev_air = player.air
 	_check_collisions()
 	_scroll_background(dt)
-	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED,
+	Audio.update_engine(player.speed / GameConfig.player.max_speed,
 			absf(player.x) > 1.0, player.steer_dir)
 
 	time_left -= dt
@@ -485,7 +485,7 @@ func _run_frame(dt: float) -> void:
 
 ## Keeps the world moving (with input disabled) during clear/game-over states.
 func _coast_frame(dt: float, target_speed: float) -> void:
-	player.speed = move_toward(player.speed, target_speed, PlayerCar.MAX_SPEED * 0.5 * dt)
+	player.speed = move_toward(player.speed, target_speed, GameConfig.player.max_speed * 0.5 * dt)
 	var g_prev := player._sprite_ground(self)
 	player.position_z = fposmod(player.position_z + player.speed * dt, track.track_length())
 	player.step_vertical(dt, self, g_prev)
@@ -495,14 +495,14 @@ func _coast_frame(dt: float, target_speed: float) -> void:
 	_update_traffic(dt)
 	rivals.update(dt, self)
 	_scroll_background(dt)
-	Audio.update_engine(player.speed / PlayerCar.MAX_SPEED, false)
+	Audio.update_engine(player.speed / GameConfig.player.max_speed, false)
 
 
 func _scroll_background(dt: float) -> void:
 	var seg := find_segment(player.position_z)
 	# In a right-hand curve the world rotates left past you, so the far
 	# hills sweep left: offset increases (sampled as x + offset).
-	renderer.hill_offset += seg.curve * (player.speed / PlayerCar.MAX_SPEED) * dt * 120.0
+	renderer.hill_offset += seg.curve * (player.speed / GameConfig.player.max_speed) * dt * 120.0
 
 
 func _update_traffic(dt: float) -> void:
@@ -533,7 +533,7 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 	var seg_count := track.segments.size()
 	# Cars far outside the drawn window don't need AI (invisible anyway).
 	var rel: int = (int(car_seg.index) - int(player_seg.index) + seg_count) % seg_count
-	if rel > RoadRenderer.DRAW_DISTANCE:
+	if rel > GameConfig.camera.draw_distance:
 		return 0.0
 
 	var car_w: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
@@ -551,7 +551,7 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 				dir = 1.0
 			else:
 				dir = 1.0 if car_x > player.x else -1.0
-			return dir / float(i) * float(car.speed - player.speed) / PlayerCar.MAX_SPEED
+			return dir / float(i) * float(car.speed - player.speed) / GameConfig.player.max_speed
 
 		# Slower car ahead: swerve around it.
 		for other in seg.cars:
@@ -569,7 +569,7 @@ func _car_steer(car: Dictionary, car_seg: Dictionary, player_seg: Dictionary,
 					dir = 1.0
 				else:
 					dir = 1.0 if car_x > other_x else -1.0
-				return dir / float(i) * float(car.speed - other.speed) / PlayerCar.MAX_SPEED
+				return dir / float(i) * float(car.speed - other.speed) / GameConfig.player.max_speed
 
 	# Nothing ahead: drift back toward the road if we've wandered wide.
 	if float(car.offset) < -0.9:
@@ -593,7 +593,7 @@ func _check_collisions() -> void:
 				continue
 			var sw: float = def.world_w / RoadRenderer.ROAD_WIDTH
 			if _overlap(player.x, player_w, spr.offset, sw):
-				player.speed = PlayerCar.MAX_SPEED * 0.06
+				player.speed = GameConfig.player.max_speed * 0.06
 				Audio.play("crash", 0.0, 1.0, 0.5)
 				break
 

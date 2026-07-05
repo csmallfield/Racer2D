@@ -2,7 +2,7 @@ class_name HudLayer
 extends CanvasLayer
 ## Simple arcade HUD: speed (bottom-left), timer (top-center),
 ## stage name (top-left), big center message, control hints (bottom).
-## Positions assume the 1280x720 logical resolution set in project.godot
+## Positions assume the 1920x1080 logical resolution set in project.godot
 ## (canvas_items stretch keeps this stable at any window size).
 
 var speed_label: Label
@@ -20,27 +20,27 @@ var track_bar: TrackBar
 
 
 func _ready() -> void:
-	stage_label = _make_label(Vector2(24, 16), Vector2(600, 40), 26,
+	stage_label = _make_label(Vector2(36, 24), Vector2(900, 60), 39,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
-	time_label = _make_label(Vector2(0, 14), Vector2(1280, 60), 44,
+	time_label = _make_label(Vector2(0, 21), Vector2(1920, 90), 66,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
-	speed_label = _make_label(Vector2(24, 650), Vector2(400, 50), 36,
+	speed_label = _make_label(Vector2(36, 975), Vector2(600, 75), 54,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
-	message_label = _make_label(Vector2(0, 280), Vector2(1280, 100), 56,
+	message_label = _make_label(Vector2(0, 420), Vector2(1920, 150), 84,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
-	position_label = _make_label(Vector2(856, 644), Vector2(400, 56), 40,
+	position_label = _make_label(Vector2(1284, 966), Vector2(600, 84), 60,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
-	flash_label = _make_label(Vector2(0, 380), Vector2(1280, 40), 26,
+	flash_label = _make_label(Vector2(0, 570), Vector2(1920, 60), 39,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
-	race_time_label = _make_label(Vector2(0, 72), Vector2(1280, 30), 20,
+	race_time_label = _make_label(Vector2(0, 108), Vector2(1920, 45), 30,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
 	track_bar = TrackBar.new()
-	track_bar.position = Vector2(240, 662)
-	track_bar.size = Vector2(800, 12)
+	track_bar.position = Vector2(360, 993)
+	track_bar.size = Vector2(1200, 18)
 	track_bar.visible = false
 	add_child(track_bar)
 	_make_leaderboard()
-	hint_label = _make_label(Vector2(0, 686), Vector2(1272, 30), 16,
+	hint_label = _make_label(Vector2(0, 1029), Vector2(1908, 45), 24,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
 	hint_label.text = "Arrows/WASD or gamepad  •  R restart  •  N next  •  P pause  •  Esc menu"
 
@@ -54,7 +54,7 @@ func _make_label(pos: Vector2, size: Vector2, font_size: int,
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.add_theme_constant_override("outline_size", 8)
+	l.add_theme_constant_override("outline_size", 12)
 	add_child(l)
 	return l
 
@@ -115,18 +115,18 @@ static func ordinal(n: int) -> String:
 
 func _make_leaderboard() -> void:
 	board_bg = ColorRect.new()
-	board_bg.position = Vector2(390, 120)
-	board_bg.size = Vector2(500, 480)
+	board_bg.position = Vector2(585, 180)
+	board_bg.size = Vector2(750, 720)
 	board_bg.color = Color(0.02, 0.02, 0.06, 0.82)
 	board_bg.visible = false
 	add_child(board_bg)
 	board_label = RichTextLabel.new()
-	board_label.position = Vector2(410, 136)
-	board_label.size = Vector2(460, 452)
+	board_label.position = Vector2(615, 204)
+	board_label.size = Vector2(690, 678)
 	board_label.bbcode_enabled = true
 	board_label.scroll_active = false
-	board_label.add_theme_font_size_override("normal_font_size", 24)
-	board_label.add_theme_font_size_override("bold_font_size", 24)
+	board_label.add_theme_font_size_override("normal_font_size", 36)
+	board_label.add_theme_font_size_override("bold_font_size", 36)
 	board_label.visible = false
 	add_child(board_label)
 
@@ -200,11 +200,11 @@ class TrackBar:
 
 	func _draw() -> void:
 		var w := size.x
-		draw_rect(Rect2(0, 5, w, 2), Color(1, 1, 1, 0.35))
+		draw_rect(Rect2(0, 7.5, w, 3), Color(1, 1, 1, 0.35))
 		for f in cp_fractions:
-			draw_rect(Rect2(float(f) * w - 1.0, 1, 2, 10), Color(1, 1, 1, 0.6))
-		draw_rect(Rect2(w - 2.0, 0, 3, 12), Color(1, 0.9, 0.3, 0.9))
+			draw_rect(Rect2(float(f) * w - 1.5, 1.5, 3, 15), Color(1, 1, 1, 0.6))
+		draw_rect(Rect2(w - 3.0, 0, 4.5, 18), Color(1, 0.9, 0.3, 0.9))
 		for d in dots:
-			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 6.0), 3.0, d.color)
-		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 6.0), 5.0, Color(0.1, 0.1, 0.1))
-		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 6.0), 4.0, Color(1, 0.85, 0.2))
+			draw_circle(Vector2(clampf(float(d.p), 0.0, 1.0) * w, 9.0), 4.5, d.color)
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 7.5, Color(0.1, 0.1, 0.1))
+		draw_circle(Vector2(clampf(player_p, 0.0, 1.0) * w, 9.0), 6.0, Color(1, 0.85, 0.2))

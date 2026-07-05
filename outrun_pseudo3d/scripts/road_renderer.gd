@@ -13,24 +13,15 @@ extends Node2D
 ## (painter's algorithm) clipped against each segment's stored clip line.
 
 const ROAD_WIDTH := 2000.0     # half-width of the road in world units
-const CAMERA_HEIGHT := 1000.0  # camera height above the road
-const AESTHETIC_LIFT := 0.08   # keeps the classic car framing above the bottom edge
-
-# Camera aim: how strongly the camera's altitude tracks the car itself
-# rather than the ground under the camera. 0 = fully terrain-following
-# (car moves freely in frame), 1 = rigidly locked to the car (car pinned
-# to its anchor). The delay is the chase lag — an exponential smoothing
-# time constant in seconds, so crest dips and jumps still read as motion
-# before the camera eases after them.
-const CAM_AIM_STRENGTH := 0.5
-const CAM_AIM_DELAY := 0.2
-const FOV_DEG := 100.0
-const DRAW_DISTANCE := 300     # segments drawn ahead of the camera
-const FOG_DENSITY := 5.0
+## Camera/view tunables come from resources/camera_settings.tres.
+## ROAD_WIDTH and LANES are structural (sprite world sizes are calibrated
+## against them), so they stay constants.
 const LANES := 3
 
+var cs: CameraSettings = GameConfig.camera
+
 var main: Node2D                 # set by main.gd
-var camera_depth: float = 1.0 / tan(deg_to_rad(FOV_DEG * 0.5))
+var camera_depth: float = 1.0 / tan(deg_to_rad(cs.fov_deg * 0.5))
 var hill_offset := 0.0           # background parallax scroll (driven by main)
 var last_cam_y := 0.0            # camera altitude this frame (projects the player)
 var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
@@ -38,7 +29,7 @@ var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
 
 ## Distance from camera to the player car along z.
 func player_z() -> float:
-	return CAMERA_HEIGHT * camera_depth
+	return cs.height * camera_depth
 
 
 func _process(_delta: float) -> void:
@@ -95,8 +86,8 @@ func _project(p: Dictionary, cam_x: float, cam_y: float, cam_z: float, w: float,
 
 
 func _fog_amount(n: int) -> float:
-	var d := float(n) / float(DRAW_DISTANCE)
-	return 1.0 - 1.0 / exp(d * d * FOG_DENSITY)
+	var d := float(n) / float(cs.draw_distance)
+	return 1.0 - 1.0 / exp(d * d * cs.fog_density)
 
 
 func _draw_road_and_sprites(w: float, h: float) -> void:
@@ -117,11 +108,11 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	# the deviation toward the car's altitude, is smoothed with the chase
 	# lag. The car sprite is projected at its true world altitude.
 	var free_alt: float = lerpf(base.p1.world.y, base.p2.world.y, base_percent) \
-			+ CAMERA_HEIGHT
-	var locked_alt: float = player.y_pos + CAMERA_HEIGHT
-	var offset_target := (locked_alt - free_alt) * CAM_AIM_STRENGTH
+			+ cs.height
+	var locked_alt: float = player.y_pos + cs.height
+	var offset_target := (locked_alt - free_alt) * cs.aim_strength
 	_aim_offset = lerpf(_aim_offset, offset_target,
-			1.0 - exp(-get_process_delta_time() / CAM_AIM_DELAY))
+			1.0 - exp(-get_process_delta_time() / cs.aim_delay))
 	var cam_y := free_alt + _aim_offset
 	last_cam_y = cam_y
 
@@ -133,7 +124,7 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 	var dx: float = -(base.curve * base_percent)
 	var apron_drawn := false
 
-	for n in range(DRAW_DISTANCE):
+	for n in range(cs.draw_distance):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
 		seg.looped = seg.index < base.index
 		seg.clip = maxy
@@ -156,7 +147,7 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 		maxy = seg.p2.screen.y
 
 	# --- Pass 2: sprites and cars, back to front (painter's algorithm). ---
-	for n in range(DRAW_DISTANCE - 1, 0, -1):
+	for n in range(cs.draw_distance - 1, 0, -1):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
 		var fog := _fog_amount(n)
 		var fog_mod := Color.WHITE.lerp(th.fog, fog * 0.8)
@@ -316,20 +307,20 @@ func _draw_sprite(sprite_name: String, scale_factor: float, x: float, y: float,
 func _draw_player(w: float, h: float) -> void:
 	var player: PlayerCar = main.player
 	var def: Dictionary = SpriteCatalog.get_def("player")
-	var sc := 1.0 / CAMERA_HEIGHT   # projection scale at the player's z
+	var sc := 1.0 / cs.height   # projection scale at the player's z
 	var dw: float = def.world_w * sc * w * 0.5
 	var dh: float = def.world_h * sc * w * 0.5
 	var cx := w * 0.5
 	# True projection of the car's world altitude against the camera. On
 	# flat ground this lands exactly on the classic 0.92h anchor (the
-	# AESTHETIC_LIFT keeps that framing); over a crest, where the camera is
+	# cs.aesthetic_lift keeps that framing); over a crest, where the camera is
 	# still behind on higher ground, the car correctly drops low in the
 	# frame — briefly toward the bottom edge — until the camera follows.
 	var ground_world: float = player.y_pos - player.air
 	var car_bottom := h * 0.5 + (last_cam_y - player.y_pos) * sc * h * 0.5 \
-			- AESTHETIC_LIFT * h
+			- cs.aesthetic_lift * h
 	var shadow_y := h * 0.5 + (last_cam_y - ground_world) * sc * h * 0.5 \
-			- AESTHETIC_LIFT * h
+			- cs.aesthetic_lift * h
 	var air_px: float = player.air * sc * h * 0.5
 	if shadow_y < h + 20.0:
 		var shrink := clampf(1.0 - air_px / 120.0, 0.55, 1.0)
@@ -337,7 +328,7 @@ func _draw_player(w: float, h: float) -> void:
 		draw_circle(Vector2.ZERO, dw * 0.46 * shrink, Color(0, 0, 0, 0.15))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var cy := car_bottom - dh * 0.5 + player.bounce
-	var tilt: float = 0.06 * player.steer_dir * (player.speed / PlayerCar.MAX_SPEED)
+	var tilt: float = 0.06 * player.steer_dir * (player.speed / GameConfig.player.max_speed)
 	draw_set_transform(Vector2(cx, cy), tilt, Vector2.ONE)
 	draw_texture_rect(def.texture, Rect2(-dw * 0.5, -dh * 0.5, dw, dh), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

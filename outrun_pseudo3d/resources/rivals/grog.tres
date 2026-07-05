@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RivalProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/rival_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "GROG"
+color = Color(0.35, 0.4, 0.95, 1)
+cruise_fraction = 0.86
+preferred_lane = -0.35

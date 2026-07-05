@@ -14,26 +14,26 @@ var _content: RichTextLabel
 
 func _ready() -> void:
 	_dim = ColorRect.new()
-	_dim.size = Vector2(1280, 720)
+	_dim.size = Vector2(1920, 1080)
 	_dim.color = Color(0.02, 0.02, 0.06, 0.66)
 	add_child(_dim)
 
 	_title_label = Label.new()
-	_title_label.position = Vector2(0, 90)
-	_title_label.size = Vector2(1280, 90)
+	_title_label.position = Vector2(0, 135)
+	_title_label.size = Vector2(1920, 135)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_label.add_theme_font_size_override("font_size", 72)
+	_title_label.add_theme_font_size_override("font_size", 108)
 	_title_label.add_theme_color_override("font_color", Color(1, 0.9, 0.3))
 	_title_label.text = TITLE
 	add_child(_title_label)
 
 	_content = RichTextLabel.new()
-	_content.position = Vector2(240, 230)
-	_content.size = Vector2(800, 440)
+	_content.position = Vector2(360, 345)
+	_content.size = Vector2(1200, 660)
 	_content.bbcode_enabled = true
 	_content.scroll_active = false
-	_content.add_theme_font_size_override("normal_font_size", 30)
-	_content.add_theme_font_size_override("bold_font_size", 30)
+	_content.add_theme_font_size_override("normal_font_size", 45)
+	_content.add_theme_font_size_override("bold_font_size", 45)
 	add_child(_content)
 
 

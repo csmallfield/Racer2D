@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CameraSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/camera_settings.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+height = 1000.0
+fov_deg = 100.0
+draw_distance = 300
+fog_density = 5.0
+aesthetic_lift = 0.08
+aim_strength = 0.5
+aim_delay = 0.2

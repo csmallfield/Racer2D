@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v21
+# Delivery Manifest — outrun_pseudo3d v22
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -19,6 +19,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/rivals.gd | ~180 | RivalManager: Road Rash-style opponent AI, ranking, overtake events |
 | scripts/menu.gd | ~110 | MenuLayer: title menu, stage picker, best-times board (visual only) |
 | scripts/records.gd | ~55 | Records: persistent top-10 times per stage per mode (JSON in user://) |
+| scripts/game_config.gd | ~30 | GameConfig autoload: loads the .tres settings with default fallbacks |
+| scripts/resources/*.gd | ~120 | Resource classes: PlayerSettings, CameraSettings, RaceSettings, RivalProfile |
+| resources/*.tres + rivals/*.tres | — | The editable tuning data: 3 settings files + 9 rival profiles |
 | scripts/levels/level_04_city.gd | ~60 | Stage 4: flat street grid, hard corners, heavy traffic, skyline |
 | scripts/levels/level_05_jungle.gd | ~60 | Stage 5: winding hilly dirt road, dense canopy, green haze |
 | scripts/levels/level_06_mountains.gd | ~60 | Stage 6: 2x-extreme hills, ballistic crests, alpine palette |
@@ -27,7 +30,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v21 fixes the post-race camera dive: the coast path (stage clear / game over) advanced the car without running its vertical physics, freezing y_pos while the terrain climbed — the aiming camera chased the stale altitude underground. The vertical step is now extracted (PlayerCar.step_vertical) and runs in both the race and coast paths.
+v22 is the resource refactor: all tunables move to editable .tres resources (player_settings, camera_settings, race_settings + 9 per-rival profiles with name/color/cruise/lane/optional car art) loaded via a GameConfig autoload with script-default fallbacks. Rivals are roster-driven (VIPER now genuinely on pole at 1.0 cruise, matching the docs). Base resolution moves to 1920x1080 with the HUD/menu re-laid-out to match (renderer was already resolution-independent).
+
+Previously: v21 fixes the post-race camera dive: the coast path (stage clear / game over) advanced the car without running its vertical physics, freezing y_pos while the terrain climbed — the aiming camera chased the stale altitude underground. The vertical step is now extracted (PlayerCar.step_vertical) and runs in both the race and coast paths.
 
 Previously: v20 fixes camera aim smoothing: v19 filtered the camera's absolute altitude, which made it trail the terrain on sustained slopes (underground on climbs, high on descents). Terrain-following is now instantaneous; only the aim offset toward the car is smoothed.
 

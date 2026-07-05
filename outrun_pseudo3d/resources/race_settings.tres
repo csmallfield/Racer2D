@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="RaceSettings" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/race_settings.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/rivals/grog.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/rivals/junko.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/rivals/biff.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/rivals/roxy.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/rivals/axel.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/rivals/slater.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/rivals/diablo.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/rivals/natasha.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/rivals/viper.tres" id="10"]
+
+[resource]
+script = ExtResource("1")
+roster = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10")]
+grid_gap = 500.0
+curve_slowdown = 0.034
+curve_slowdown_cap = 0.25
+apex_bias = 0.08
+lateral_speed = 1.0
+lookahead = 35
+dodge_commit = 0.5
+dodge_rate = 1.3
+accel = 3000.0
+rubber_range = 12000.0
+rubber_ahead = 0.99
+rubber_behind = 1.05
+bonk_speed_cut = 0.75
+bonk_cooldown = 1.5
+ram_distance = 700.0
+flash_range = 2500.0

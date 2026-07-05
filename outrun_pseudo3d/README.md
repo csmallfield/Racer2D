@@ -149,6 +149,26 @@ their track via `music = "music_coastal"`; see `TrackLevel`).
 Mix levels are constants at the top of `scripts/audio_manager.gd` (an
 autoload registered as `Audio`).
 
+## Tuning via resources
+
+Every gameplay tunable lives in editable `.tres` resources under
+`resources/` (open them in the Godot inspector, or as text):
+
+- `player_settings.tres` — car physics: speed, handling, air, slipstream.
+- `camera_settings.tres` — view: height, FOV, draw distance, fog, and the
+  camera-aim strength/delay.
+- `race_settings.tres` — pack AI (cornering, dodging, rubber-banding,
+  collisions) plus the **roster**: an ordered list of rival profiles.
+  Roster order is grid order — the last entry starts on pole.
+- `resources/rivals/*.tres` — one profile per opponent: display name,
+  livery color (drives the placeholder car and the progress-bar dot),
+  cruise speed as a fraction of yours, preferred racing lane, and an
+  optional `car_texture` to point at real sprite art.
+
+Missing or broken resource files fall back to identical script defaults,
+so the game always boots. Adding a tenth rival = new profile + append to
+the roster; levels' `rival_count` takes the first N.
+
 ## Menu, modes, and best times
 
 The game boots to a title menu (over an idle stage backdrop): **RACE**
