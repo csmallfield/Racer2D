@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v29
+# Delivery Manifest — outrun_pseudo3d v30
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -33,7 +33,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v29 fixes the v26 track scaling, which stretched individual pieces (10-second grinding corners where the AI's flat curve-speed advantage shows). Piece presets revert to v25 sizes; every level (tours, circuits, halloween, candy) is re-authored to the same ~4x total length via MORE v25-scale sections — short punchy corners and hills, straights as braking zones before hard corners, the occasional long climb for scale (mountains keeps its 2x-preset ballistic crests). Boost economy rebalanced: pickup density cut ~4x (one per ~450 segments), respawn 15->25s, so the leader can't stay permanently fueled.
+v30 is the AI challenge package: rivals draft (player slipstream physics off traffic/each other/player mirrors, applied after the rubber clamp — the honest gap-closer), smarter boost AI (corner-exit bursts at 2x take-rate, gap-closing when far behind), pickup seeking (hungry rivals steer for canisters ahead), the hunter (lead too long and the fastest surviving rival gets +2.5% and max aggression, announced by name, until they retake the lead), and rhythmic traffic (packs, loners, 3-abreast rolling roadblocks; counts +50%). New RaceSettings groups: Hunter, Traffic Placement.
+
+Previously: v29 fixes the v26 track scaling, which stretched individual pieces (10-second grinding corners where the AI's flat curve-speed advantage shows). Piece presets revert to v25 sizes; every level (tours, circuits, halloween, candy) is re-authored to the same ~4x total length via MORE v25-scale sections — short punchy corners and hills, straights as braking zones before hard corners, the occasional long climb for scale (mountains keeps its 2x-preset ballistic crests). Boost economy rebalanced: pickup density cut ~4x (one per ~450 segments), respawn 15->25s, so the leader can't stay permanently fueled.
 
 Previously: v27 adds CIRCUIT mode: the original mode is renamed TOUR; circuits are short, turn-biased looping tracks raced over laps (laps property on TrackLevel; time_limit = per-lap), with lap counting, lap-line timer refills, lap-aware checkpoint splits, lapping of opponents via total-progress ranking, per-lap progress-bar positions, LAP x/y HUD, circuit best-times column, and three new circuits reusing existing themes: Seaside Ring (left-biased), Neon Loop (right-biased), Sugar Ring (left-biased, bouncy).
 

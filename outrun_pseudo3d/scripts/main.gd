@@ -372,23 +372,55 @@ func _init_pickups() -> void:
 		pickups.append(track.segments[idx].pickups[-1])
 
 
+## Traffic spawns with RHYTHM, not uniformity: loose packs (mixed lanes and
+## pace), occasional 3-abreast rolling roadblocks that demand a real
+## decision, some loners, and breathing room in between.
 func _spawn_traffic() -> void:
 	cars.clear()
 	for seg in track.segments:
 		seg.cars.clear()
-	var lane_offsets := [-0.66, 0.0, 0.66]
-	var sprite_names := ["car_blue", "car_yellow", "car_green"]
-	for i in range(level.traffic_count):
-		var z := randf_range(3000.0, track.track_length() - 3000.0)
-		var car := {
-			"z": z,
-			"offset": lane_offsets.pick_random(),
-			"speed": GameConfig.player.max_speed * randf_range(0.12, 0.5),
-			"sprite": sprite_names.pick_random(),
-			"y": ground_y(z), "vy": 0.0, "air": 0.0,   # vertical state
-		}
-		cars.append(car)
-		find_segment(z).cars.append(car)
+	var lanes := [-0.66, 0.0, 0.66]
+	var sprites := ["car_blue", "car_yellow", "car_green"]
+	var rc: RaceSettings = GameConfig.race
+	var budget: int = level.traffic_count
+	var lo := 3000.0
+	var hi := track.track_length() - 3000.0
+	while budget > 0:
+		var roll := randf()
+		if roll < rc.single_car_chance or budget < 3:
+			_place_traffic_car(randf_range(lo, hi), float(lanes.pick_random()),
+					randf_range(0.12, 0.5), sprites)
+			budget -= 1
+		elif roll < rc.single_car_chance + rc.roadblock_chance:
+			# Rolling roadblock: all three lanes, staggered, matched pace —
+			# thread it, boost around it, or brake and draft.
+			var z := randf_range(lo, hi)
+			var pace := randf_range(0.16, 0.3)
+			for k in range(3):
+				_place_traffic_car(z + float(k) * randf_range(120.0, 260.0),
+						float(lanes[k]), pace + randf_range(-0.02, 0.02), sprites)
+			budget -= 3
+		else:
+			var size: int = mini(randi_range(rc.traffic_cluster_min,
+					rc.traffic_cluster_max), budget)
+			var z2 := randf_range(lo, hi)
+			for k in range(size):
+				_place_traffic_car(z2 + randf_range(0.0, 1500.0),
+						float(lanes.pick_random()), randf_range(0.12, 0.5), sprites)
+			budget -= size
+
+
+func _place_traffic_car(z: float, offset: float, pace: float, sprites: Array) -> void:
+	z = clampf(z, 2500.0, track.track_length() - 500.0)
+	var car := {
+		"z": z,
+		"offset": offset,
+		"speed": GameConfig.player.max_speed * pace,
+		"sprite": sprites.pick_random(),
+		"y": ground_y(z), "vy": 0.0, "air": 0.0,
+	}
+	cars.append(car)
+	find_segment(z).cars.append(car)
 
 
 func find_segment(z: float) -> Dictionary:

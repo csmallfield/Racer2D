@@ -47,3 +47,18 @@ extends Resource
 @export var pickup_respawn := 25.0      # seconds until a taken canister returns
 ## Random canisters scattered when a level defines none of its own.
 @export var auto_pickup_count := 4
+
+@export_group("Hunter")
+## When a player holds the overall lead for hunter_delay seconds, the
+## fastest surviving rival gets a modest speed bonus and max boost
+## aggression until they retake the lead. Kept small so it reads as a
+## rivalry, not a cheat.
+@export var hunter_enabled := true
+@export var hunter_speed_bonus := 0.025
+@export var hunter_delay := 4.0
+
+@export_group("Traffic Placement")
+@export var traffic_cluster_min := 2
+@export var traffic_cluster_max := 5
+@export var roadblock_chance := 0.2    # 3-abreast staggered rolling blocks
+@export var single_car_chance := 0.3   # loners; the rest spawns as packs

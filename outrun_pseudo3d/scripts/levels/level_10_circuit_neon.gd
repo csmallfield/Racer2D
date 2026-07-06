@@ -8,7 +8,7 @@ func _init() -> void:
 	time_limit = 75.0          # per lap
 	laps = 3
 	checkpoint_count = 2
-	traffic_count = 18
+	traffic_count = 27
 	music = "music_city"
 	theme = {
 		"sky_top": Color(0.1, 0.02, 0.18),

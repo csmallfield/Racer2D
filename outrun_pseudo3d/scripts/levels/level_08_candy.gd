@@ -8,7 +8,7 @@ extends TrackLevel
 func _init() -> void:
 	level_name = "STAGE 8 — SUGAR RUSH"
 	time_limit = 340.0
-	traffic_count = 48
+	traffic_count = 72
 	music = "music_candy"
 	theme = {
 		"sky_top": Color(0.55, 0.8, 1.0),

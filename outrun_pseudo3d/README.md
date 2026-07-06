@@ -228,6 +228,17 @@ sling past. Stay tucked too long and you'll rear-end them. This is your
 deliberate passing tool against rivals who match your top speed; rivals
 don't get it.
 
+**The chase**: leading is aerodynamically expensive. Rivals draft — off
+traffic, each other, and you — with the same slipstream physics you have,
+so a chase pack forms trains and runs faster than a lone leader. They burn
+boost out of corner exits and to close big gaps, and hungry rivals steer
+for canisters instead of leaving them all to you. Hold the overall lead
+too long and the fastest surviving rival is designated your hunter (small
+speed bonus, maximum boost aggression, announced by name) until they
+retake the lead. Traffic spawns with rhythm: loose packs, loners, and
+3-abreast rolling roadblocks that force a real decision. All of it is
+tunable in race_settings.tres.
+
 **Boost**: every racer carries limited boost fuel (Shift / gamepad B; the
 orange gauge bottom-left). It raises top speed and acceleration but grants
 zero extra steering — and centrifugal force scales with your real speed, so

@@ -23,6 +23,8 @@ extends RefCounted
 ## Pack tuning and roster come from resources/race_settings.tres via the
 ## GameConfig autoload; per-rival personality from resources/rivals/*.tres.
 var cfg: RaceSettings = GameConfig.race
+var hunter := -1        # index of the designated hunter, -1 = none
+var _lead_t := 0.0      # seconds the lead player has held the overall lead
 
 var rivals: Array = []
 var events: Array[String] = []    # overtake messages, consumed by main each frame
@@ -35,6 +37,8 @@ var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 ## and races through the pack, Road Rash style.
 func spawn(main: Node2D, count: int) -> void:
 	rivals.clear()
+	hunter = -1
+	_lead_t = 0.0
 	leader_cp_times.clear()
 	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
@@ -57,6 +61,8 @@ func spawn(main: Node2D, count: int) -> void:
 			"finish_time": -1.0,   # race clock at the finish line, -1 = racing
 			"y": main.ground_y(cfg.grid_gap * float(i + 1)), "vy": 0.0, "air": 0.0,
 			"boost": profile.boost_capacity,
+			"slip": 0.0,
+			"prev_curve": 0.0,
 			"boost_cap": profile.boost_capacity,
 			"boosting": false,
 			"aggression": profile.boost_aggression,
@@ -78,8 +84,38 @@ func update(dt: float, main: Node2D) -> void:
 	# their mirror entities in the segment car lists.
 	var lead_progress: float = main.lead_progress()
 
-	for r in rivals:
+	# --- Hunter designation: if a player holds the overall lead, the
+	# fastest surviving rival is sent after them. Cleared the moment the
+	# hunter retakes the lead (mission accomplished) or finishes. ---
+	if cfg.hunter_enabled and not rivals.is_empty():
+		var rival_best := 0.0
+		for h in rivals:
+			rival_best = maxf(rival_best, float(h.z))
+		if lead_progress > rival_best:
+			_lead_t += dt
+		else:
+			_lead_t = 0.0
+			if hunter >= 0 and float(rivals[hunter].z) >= lead_progress:
+				hunter = -1
+		if hunter >= 0 and bool(rivals[hunter].finished):
+			hunter = -1
+			_lead_t = 0.0
+		if hunter < 0 and _lead_t >= cfg.hunter_delay:
+			var best_i := -1
+			var best_speed := 0.0
+			for i in range(rivals.size()):
+				if not bool(rivals[i].finished) \
+						and float(rivals[i].base_speed) > best_speed:
+					best_speed = float(rivals[i].base_speed)
+					best_i = i
+			if best_i >= 0:
+				hunter = best_i
+				events.append("%s IS HUNTING YOU" % rivals[best_i].name)
+
+	for ri in range(rivals.size()):
+		var r: Dictionary = rivals[ri]
 		var old_seg: Dictionary = main.find_segment(float(r.z))
+		var seg_count: int = main.track.segments.size()
 		var rival_w: float = SpriteCatalog.get_def(r.sprite).world_w \
 				/ RoadRenderer.ROAD_WIDTH
 
@@ -92,12 +128,44 @@ func update(dt: float, main: Node2D) -> void:
 			target *= cfg.rubber_ahead
 		elif gap < -cfg.rubber_range:
 			target = minf(target * cfg.rubber_behind, GameConfig.player.max_speed * 0.99)
+		var aggr: float = float(r.aggression)
+		if ri == hunter:
+			target *= 1.0 + cfg.hunter_speed_bonus
+			aggr = maxf(aggr, 0.85)
+
+		# --- Drafting: the same slipstream physics the player has, off
+		# traffic, other rivals, and player mirrors. A chase train runs
+		# faster than a lone leader; applied after the rubber clamp, this
+		# is the honest gap-closer. ---
+		var ps: PlayerSettings = GameConfig.player
+		var in_stream := false
+		if float(r.speed) / ps.max_speed > ps.slip_min_speed \
+				and float(r.air) < 10.0:
+			for k in range(1, ps.slip_segments + 1):
+				var sseg: Dictionary = main.track.segments[
+						(int(old_seg.index) + k) % seg_count]
+				for other in sseg.cars:
+					if other == r:
+						continue
+					if absf(float(other.offset) - float(r.offset)) < ps.slip_lateral:
+						in_stream = true
+						break
+				if in_stream:
+					break
+		r.slip = move_toward(float(r.slip), 1.0 if in_stream else 0.0,
+				dt / ps.slip_build_time)
+		target *= 1.0 + ps.slip_top_bonus * float(r.slip)
 
 		# --- Boost policy: burn fuel on straights while attacking the
 		# player from behind or sprinting for the line. Aggression sets
 		# how quickly a rival takes a valid opening (applied AFTER the
 		# rubber clamp — boost genuinely exceeds normal ceilings).
 		var straight := absf(float(old_seg.curve)) <= cfg.boost_curve_threshold
+		# Corner exits are prime boost real estate: just left a corner,
+		# road now open. Chasing = far behind the lead — burn to close.
+		var exiting: bool = straight \
+				and absf(float(r.prev_curve)) > cfg.boost_curve_threshold
+		r.prev_curve = old_seg.curve
 		if bool(r.boosting):
 			if not straight or float(r.boost) <= 0.0:
 				r.boosting = false
@@ -105,14 +173,16 @@ func update(dt: float, main: Node2D) -> void:
 			var sprinting: bool = float(r.z) \
 					> float(main.race_length()) * cfg.final_sprint_fraction
 			var attacking := gap < 0.0 and gap > -cfg.boost_attack_range
-			if (sprinting or attacking) \
-					and randf() < float(r.aggression) * dt * 2.0:
+			var chasing := gap < -cfg.rubber_range
+			if (sprinting or attacking or chasing or exiting) \
+					and randf() < aggr * dt * (4.0 if exiting else 2.0):
 				r.boosting = true
 		if bool(r.boosting):
 			r.boost = maxf(0.0, float(r.boost) - dt)
 			target *= 1.0 + GameConfig.player.boost_top_bonus
 
-		r.speed = move_toward(float(r.speed), target, cfg.accel * dt)
+		r.speed = move_toward(float(r.speed), target,
+				cfg.accel * (1.0 + ps.slip_accel_bonus * float(r.slip)) * dt)
 
 		# --- Steering: dodge obstacles, otherwise run the racing line.
 		# Dodges are COMMITTED: the first dodge signal latches a direction
@@ -130,9 +200,23 @@ func update(dt: float, main: Node2D) -> void:
 			r.offset = float(r.offset) + float(r.dodge_dir) * cfg.dodge_rate * dt \
 					* (float(r.speed) / GameConfig.player.max_speed)
 		else:
-			var apex: float = clampf(
+			# Hungry rivals steer for canisters ahead; otherwise run the
+			# racing line. Dodges (above) always take priority.
+			var goal: float = clampf(
 					float(r.lane) - float(old_seg.curve) * cfg.apex_bias, -0.85, 0.85)
-			r.offset = move_toward(float(r.offset), apex,
+			if float(r.boost) < float(r.boost_cap) - cfg.pickup_boost_amount * 0.5:
+				for k in range(1, cfg.lookahead):
+					var pseg: Dictionary = main.track.segments[
+							(int(old_seg.index) + k) % seg_count]
+					var found := false
+					for pu in pseg.pickups:
+						if not bool(pu.taken):
+							goal = clampf(float(pu.offset), -0.85, 0.85)
+							found = true
+							break
+					if found:
+						break
+			r.offset = move_toward(float(r.offset), goal,
 					dt * cfg.lateral_speed * (float(r.speed) / GameConfig.player.max_speed))
 		r.offset = clampf(float(r.offset), -1.0, 1.0)
 
