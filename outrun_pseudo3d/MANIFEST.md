@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v30
+# Delivery Manifest — outrun_pseudo3d v31
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -33,7 +33,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v30 is the AI challenge package: rivals draft (player slipstream physics off traffic/each other/player mirrors, applied after the rubber clamp — the honest gap-closer), smarter boost AI (corner-exit bursts at 2x take-rate, gap-closing when far behind), pickup seeking (hungry rivals steer for canisters ahead), the hunter (lead too long and the fastest surviving rival gets +2.5% and max aggression, announced by name, until they retake the lead), and rhythmic traffic (packs, loners, 3-abreast rolling roadblocks; counts +50%). New RaceSettings groups: Hunter, Traffic Placement.
+v31 hardens the AI substantially: the hunter is REPLACED by pack momentum (a capped per-nearby-rival speed bonus — the fake extension of drafting; trains and splinter groups bridge to lone leaders); cruise ladder raised past the player (0.94-1.03, VIPER faster than your flat-out); per-race form variance (+/-2.5% rolled at the grid, finish order varies); rubber clamp 0.99->1.0, rubber_behind 1.08, range 9000; sharper cornering (slowdown 0.028, cap 0.2, lookahead 40, dodge_rate 1.5); boost capacity 4s + aggression ladder 0.4-1.0, attack range 10000, sprint from 80%.
+
+Previously: v30 is the AI challenge package: rivals draft (player slipstream physics off traffic/each other/player mirrors, applied after the rubber clamp — the honest gap-closer), smarter boost AI (corner-exit bursts at 2x take-rate, gap-closing when far behind), pickup seeking (hungry rivals steer for canisters ahead), the hunter (lead too long and the fastest surviving rival gets +2.5% and max aggression, announced by name, until they retake the lead), and rhythmic traffic (packs, loners, 3-abreast rolling roadblocks; counts +50%). New RaceSettings groups: Hunter, Traffic Placement.
 
 Previously: v29 fixes the v26 track scaling, which stretched individual pieces (10-second grinding corners where the AI's flat curve-speed advantage shows). Piece presets revert to v25 sizes; every level (tours, circuits, halloween, candy) is re-authored to the same ~4x total length via MORE v25-scale sections — short punchy corners and hills, straights as braking zones before hard corners, the occasional long climb for scale (mountains keeps its 2x-preset ballistic crests). Boost economy rebalanced: pickup density cut ~4x (one per ~450 segments), respawn 15->25s, so the leader can't stay permanently fueled.
 

@@ -48,14 +48,17 @@ extends Resource
 ## Random canisters scattered when a level defines none of its own.
 @export var auto_pickup_count := 4
 
-@export_group("Hunter")
-## When a player holds the overall lead for hunter_delay seconds, the
-## fastest surviving rival gets a modest speed bonus and max boost
-## aggression until they retake the lead. Kept small so it reads as a
-## rivalry, not a cheat.
-@export var hunter_enabled := true
-@export var hunter_speed_bonus := 0.025
-@export var hunter_delay := 4.0
+@export_group("Pack Momentum")
+## The fake extension of drafting: rivals running in a group carry each
+## other — a speed bonus per nearby rival (within pack_radius), capped at
+## pack_max_stack cars. One big train or several splinter groups can
+## bridge gaps to a lone leader that no single car ever could.
+@export var pack_radius := 3000.0
+@export var pack_bonus_per_car := 0.015
+@export var pack_max_stack := 5
+## Per-race cruise variance: each rival rolls form at the grid, so the
+## same cars don't finish in the same order every race.
+@export var form_variance := 0.025
 
 @export_group("Traffic Placement")
 @export var traffic_cluster_min := 2

@@ -23,8 +23,6 @@ extends RefCounted
 ## Pack tuning and roster come from resources/race_settings.tres via the
 ## GameConfig autoload; per-rival personality from resources/rivals/*.tres.
 var cfg: RaceSettings = GameConfig.race
-var hunter := -1        # index of the designated hunter, -1 = none
-var _lead_t := 0.0      # seconds the lead player has held the overall lead
 
 var rivals: Array = []
 var events: Array[String] = []    # overtake messages, consumed by main each frame
@@ -37,8 +35,6 @@ var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 ## and races through the pack, Road Rash style.
 func spawn(main: Node2D, count: int) -> void:
 	rivals.clear()
-	hunter = -1
-	_lead_t = 0.0
 	leader_cp_times.clear()
 	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
@@ -53,7 +49,11 @@ func spawn(main: Node2D, count: int) -> void:
 			"offset": -0.45 if i % 2 == 0 else 0.45,
 			"lane": profile.preferred_lane,
 			"speed": 0.0,          # standing start behind the countdown
-			"base_speed": profile.cruise_fraction * GameConfig.player.max_speed,
+			# Form: a per-race roll on cruise, so grid order doesn't
+			# script the finish and different races have different heroes.
+			"base_speed": (profile.cruise_fraction + randf_range(
+					-cfg.form_variance, cfg.form_variance))
+					* GameConfig.player.max_speed,
 			"bonk_t": 0.0,
 			"dodge_dir": 0.0,      # committed dodge direction (hysteresis)
 			"dodge_t": 0.0,        # time remaining on the commitment
@@ -84,34 +84,6 @@ func update(dt: float, main: Node2D) -> void:
 	# their mirror entities in the segment car lists.
 	var lead_progress: float = main.lead_progress()
 
-	# --- Hunter designation: if a player holds the overall lead, the
-	# fastest surviving rival is sent after them. Cleared the moment the
-	# hunter retakes the lead (mission accomplished) or finishes. ---
-	if cfg.hunter_enabled and not rivals.is_empty():
-		var rival_best := 0.0
-		for h in rivals:
-			rival_best = maxf(rival_best, float(h.z))
-		if lead_progress > rival_best:
-			_lead_t += dt
-		else:
-			_lead_t = 0.0
-			if hunter >= 0 and float(rivals[hunter].z) >= lead_progress:
-				hunter = -1
-		if hunter >= 0 and bool(rivals[hunter].finished):
-			hunter = -1
-			_lead_t = 0.0
-		if hunter < 0 and _lead_t >= cfg.hunter_delay:
-			var best_i := -1
-			var best_speed := 0.0
-			for i in range(rivals.size()):
-				if not bool(rivals[i].finished) \
-						and float(rivals[i].base_speed) > best_speed:
-					best_speed = float(rivals[i].base_speed)
-					best_i = i
-			if best_i >= 0:
-				hunter = best_i
-				events.append("%s IS HUNTING YOU" % rivals[best_i].name)
-
 	for ri in range(rivals.size()):
 		var r: Dictionary = rivals[ri]
 		var old_seg: Dictionary = main.find_segment(float(r.z))
@@ -127,11 +99,20 @@ func update(dt: float, main: Node2D) -> void:
 		if gap > cfg.rubber_range:
 			target *= cfg.rubber_ahead
 		elif gap < -cfg.rubber_range:
-			target = minf(target * cfg.rubber_behind, GameConfig.player.max_speed * 0.99)
+			target = minf(target * cfg.rubber_behind, GameConfig.player.max_speed * 1.0)
 		var aggr: float = float(r.aggression)
-		if ri == hunter:
-			target *= 1.0 + cfg.hunter_speed_bonus
-			aggr = maxf(aggr, 0.85)
+
+		# --- Pack momentum: the fake extension of drafting. Rivals running
+		# in a group carry each other — a bonus per nearby rival, capped —
+		# so one big train or several splinter groups bridge gaps a lone
+		# car never could. Applied after the rubber clamp: packs genuinely
+		# exceed the normal ceilings. ---
+		var pack_n := 0
+		for oj in range(rivals.size()):
+			if oj != ri and not bool(rivals[oj].finished) \
+					and absf(float(rivals[oj].z) - float(r.z)) < cfg.pack_radius:
+				pack_n += 1
+		target *= 1.0 + cfg.pack_bonus_per_car * float(mini(pack_n, cfg.pack_max_stack))
 
 		# --- Drafting: the same slipstream physics the player has, off
 		# traffic, other rivals, and player mirrors. A chase train runs

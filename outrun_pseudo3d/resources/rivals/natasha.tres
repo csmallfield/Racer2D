@@ -6,7 +6,7 @@
 script = ExtResource("1")
 display_name = "NATASHA"
 color = Color(0.85, 0.1, 0.55, 1)
-cruise_fraction = 0.98
+cruise_fraction = 1.01
 preferred_lane = 0.35
-boost_capacity = 3.0
-boost_aggression = 0.8
+boost_capacity = 4.0
+boost_aggression = 0.9

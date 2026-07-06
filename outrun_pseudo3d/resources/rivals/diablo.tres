@@ -6,7 +6,7 @@
 script = ExtResource("1")
 display_name = "DIABLO"
 color = Color(0.55, 0.2, 0.9, 1)
-cruise_fraction = 0.965
+cruise_fraction = 0.995
 preferred_lane = -0.3
-boost_capacity = 3.0
-boost_aggression = 0.7
+boost_capacity = 4.0
+boost_aggression = 0.8

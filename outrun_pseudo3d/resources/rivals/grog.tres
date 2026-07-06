@@ -6,7 +6,7 @@
 script = ExtResource("1")
 display_name = "GROG"
 color = Color(0.35, 0.4, 0.95, 1)
-cruise_fraction = 0.86
+cruise_fraction = 0.94
 preferred_lane = -0.35
-boost_capacity = 3.0
-boost_aggression = 0.25
+boost_capacity = 4.0
+boost_aggression = 0.4

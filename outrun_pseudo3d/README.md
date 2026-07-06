@@ -230,14 +230,16 @@ don't get it.
 
 **The chase**: leading is aerodynamically expensive. Rivals draft — off
 traffic, each other, and you — with the same slipstream physics you have,
-so a chase pack forms trains and runs faster than a lone leader. They burn
-boost out of corner exits and to close big gaps, and hungry rivals steer
-for canisters instead of leaving them all to you. Hold the overall lead
-too long and the fastest surviving rival is designated your hunter (small
-speed bonus, maximum boost aggression, announced by name) until they
-retake the lead. Traffic spawns with rhythm: loose packs, loners, and
-3-abreast rolling roadblocks that force a real decision. All of it is
-tunable in race_settings.tres.
+and on top of it packs carry **momentum**: a speed bonus per nearby rival
+(capped), so one big train or several splinter groups bridge gaps a lone
+car never could. The front of the roster is genuinely faster than your
+top speed — VIPER cruises at 103% — and every rival rolls per-race form
+at the grid, so the same cars don't finish in the same order twice. They
+burn boost out of corner exits and to close big gaps, and hungry rivals
+steer for canisters instead of leaving them to you. You win in the
+corners, in the draft, in traffic, and with boost timing — not on raw
+pace. Traffic spawns with rhythm: loose packs, loners, and 3-abreast
+rolling roadblocks. All of it is tunable in race_settings.tres.
 
 **Boost**: every racer carries limited boost fuel (Shift / gamepad B; the
 orange gauge bottom-left). It raises top speed and acceleration but grants

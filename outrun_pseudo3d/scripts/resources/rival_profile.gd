@@ -17,7 +17,7 @@ extends Resource
 @export var car_texture: Texture2D
 
 @export_group("Boost")
-@export var boost_capacity := 3.0
+@export var boost_capacity := 4.0
 ## Willingness to burn boost (0 = hoards it, 1 = fires at every opening).
 ## Governs how quickly they take valid opportunities: straights while
 ## attacking the player or sprinting for the line.

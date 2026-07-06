@@ -6,7 +6,7 @@
 script = ExtResource("1")
 display_name = "BIFF"
 color = Color(0.1, 0.75, 0.8, 1)
-cruise_fraction = 0.9
+cruise_fraction = 0.96
 preferred_lane = -0.5
-boost_capacity = 3.0
-boost_aggression = 0.4
+boost_capacity = 4.0
+boost_aggression = 0.5
