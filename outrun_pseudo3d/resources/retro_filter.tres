@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RetroFilterSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/retro_filter_settings.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enabled_by_default = false
+curvature = 0.04
+scanlines = 0.3
+scanline_density = 540.0
+fringe = 1.4
+vignette = 0.25
+noise = 0.05
+flicker = 0.02

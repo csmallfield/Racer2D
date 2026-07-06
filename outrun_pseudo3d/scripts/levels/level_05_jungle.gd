@@ -7,8 +7,8 @@ extends TrackLevel
 
 func _init() -> void:
 	level_name = "STAGE 5 — JUNGLE RUN"
-	time_limit = 95.0
-	traffic_count = 10
+	time_limit = 380.0
+	traffic_count = 40
 	music = "music_jungle"
 	theme = {
 		"sky_top": Color(0.35, 0.6, 0.55),
@@ -30,20 +30,59 @@ func _init() -> void:
 
 func build(b: TrackBuilder) -> void:
 	var R := TrackBuilder.ROAD
+	# Winding and hilly, almost no rest.
 
-	# --- Road layout: winding, hilly, almost no rest ---
 	b.add_straight(R.LENGTH.SHORT)
 	b.add_s_curves()
 	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_s_curves()
 	b.add_low_rolling_hills()
 	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, -R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, -R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.MEDIUM)
 	b.add_s_curves()
 	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, R.HILL.LOW)
 	b.add_low_rolling_hills()
 	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, -R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_s_curves()
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.MEDIUM)
+	b.add_s_curves()
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, -R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_s_curves()
+	b.add_s_curves()
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.MEDIUM)
+	b.add_s_curves()
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, -R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_s_curves()
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD, -R.HILL.LOW)
+	b.add_low_rolling_hills()
 	b.add_downhill_to_end()
 
-	# --- Scenery: canopy pressing in on both sides ---
 	var end := b.segments.size()
 	b.add_scenery("tree", 8, end, 5, 1.0, 1.25, 2.2)
 	b.add_scenery("tree", 11, end, 5, -1.0, 1.25, 2.2)

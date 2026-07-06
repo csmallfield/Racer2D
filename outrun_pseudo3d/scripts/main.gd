@@ -11,9 +11,9 @@ const MP_FINISH_GRACE := 20.0   # after the first finish, others get this long
 const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 
 enum State { MENU, PLAYER_SELECT, LEVEL_SELECT, LEADERBOARD, SETTINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
-enum Mode { RACE, TIME_TRIAL }
+enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
 
-const MENU_ITEMS: Array[String] = ["RACE", "TIME TRIAL", "BEST TIMES", "SETTINGS", "QUIT"]
+const MENU_ITEMS: Array[String] = ["TOUR", "CIRCUIT", "TIME TRIAL", "BEST TIMES", "SETTINGS", "QUIT"]
 
 ## Settings rows: {label, property (on the Settings autoload), type, step, min, max}
 const SETTINGS_ROWS: Array = [
@@ -33,6 +33,8 @@ const PLAYER_COUNTS: Array[int] = [1, 2, 4]
 var level_paths: Array = []
 var level_names: Array = []
 var level_musics: Array = []
+var level_laps: Array = []      # per level: 0 = tour, >0 = circuit lap count
+var laps: Array[int] = []       # per player: completed laps this race
 var level_index := 0
 var level: TrackLevel
 var track: TrackBuilder
@@ -54,7 +56,7 @@ var _finishers := 0
 var _finish_deadline := -1.0
 
 var state: State = State.MENU
-var mode: Mode = Mode.RACE
+var mode: Mode = Mode.TOUR
 var menu: MenuLayer
 var menu_sel := 0
 var select_sel := 0
@@ -96,8 +98,26 @@ func lead_progress() -> float:
 
 func _effective_progress(i: int) -> float:
 	if finished[i]:
-		return track.track_length() + float(100 - finish_order[i]) * 10.0
-	return players[i].position_z
+		return race_length() + float(100 - finish_order[i]) * 10.0
+	return float(laps[i]) * track.track_length() + players[i].position_z
+
+
+func total_laps() -> int:
+	return maxi(level.laps, 1)
+
+
+func race_length() -> float:
+	return float(total_laps()) * track.track_length()
+
+
+func total_cps() -> int:
+	return cp_zs.size() * total_laps()
+
+
+## Absolute race progress of checkpoint index k (indices run through laps).
+func cp_progress_z(k: int) -> float:
+	var per_lap := cp_zs.size()
+	return float(k / per_lap) * track.track_length() + cp_zs[k % per_lap]
 
 
 func player_z() -> float:
@@ -174,10 +194,12 @@ func _discover_levels() -> void:
 	level_paths.sort()
 	level_names.clear()
 	level_musics.clear()
+	level_laps.clear()
 	for path in level_paths:
 		var script: GDScript = load(path)
 		var inst: TrackLevel = script.new()
 		level_names.append(inst.level_name)
+		level_laps.append(inst.laps)
 		if not inst.music.is_empty() and not level_musics.has(inst.music):
 			level_musics.append(inst.music)
 	if level_paths.is_empty():
@@ -210,7 +232,9 @@ func _load_level(idx: int) -> void:
 	finish_order.clear()
 	_prev_air.clear()
 	_prev_boosting.clear()
+	laps.clear()
 	for i in range(player_count):
+		laps.append(0)
 		SpriteCatalog.register_player(i)
 		var p := PlayerCar.new()
 		p.input_prefix = "p%d_" % i
@@ -234,7 +258,7 @@ func _load_level(idx: int) -> void:
 	for i in range(player_count):
 		_sync_mirror(i, true)
 	rivals = RivalManager.new()
-	rivals.spawn(self, level.rival_count if mode == Mode.RACE else 0)
+	rivals.spawn(self, level.rival_count if mode != Mode.TIME_TRIAL else 0)
 
 	time_left = section_time
 	_last_beep_second = -1
@@ -334,7 +358,11 @@ func _init_pickups() -> void:
 			pickups.append(pu)
 	if not pickups.is_empty():
 		return
-	var count: int = GameConfig.race.auto_pickup_count
+	# Sparse by design: one canister per ~450 segments (roughly one per
+	# checkpoint section). Plentiful boost hands the leader an insurmountable
+	# edge — scarcity is what makes taking one a decision.
+	var count: int = maxi(GameConfig.race.auto_pickup_count,
+			track.segments.size() / 450)
 	var lanes: Array = [-0.66, 0.0, 0.66]
 	var seg_count := track.segments.size()
 	for i in range(count):
@@ -379,7 +407,7 @@ func _process(dt: float) -> void:
 			_start_race(level_index)
 			return
 		if Input.is_action_just_pressed("next_level"):
-			_start_race(level_index + 1)
+			_start_race(_next_in_category(level_index, 1))
 			return
 
 	if state >= State.COUNTDOWN and Input.is_action_just_pressed("ui_cancel"):
@@ -427,7 +455,7 @@ func _process(dt: float) -> void:
 				for i in range(views.size()):
 					views[i].hud.show_leaderboard(live, _view_titles[i])
 			if Input.is_action_just_pressed("ui_accept") or _any_accel():
-				_start_race(level_index + 1)
+				_start_race(_next_in_category(level_index, 1))
 		State.GAME_OVER:
 			for i in range(players.size()):
 				_coast_player(i, dt, 0.0)
@@ -469,20 +497,23 @@ func _menu_frame(dt: float) -> void:
 		Audio.play("menu_select")
 		match menu_sel:
 			0:
-				mode = Mode.RACE
+				mode = Mode.TOUR
 				_open_player_select()
 			1:
-				mode = Mode.TIME_TRIAL
+				mode = Mode.CIRCUIT
 				_open_player_select()
 			2:
+				mode = Mode.TIME_TRIAL
+				_open_player_select()
+			3:
 				state = State.LEADERBOARD
 				select_sel = 0
 				_refresh_board()
-			3:
+			4:
 				state = State.SETTINGS
 				menu_sel = 0
 				_show_settings()
-			4:
+			5:
 				get_tree().quit()
 
 
@@ -578,14 +609,48 @@ func _show_settings() -> void:
 
 
 func _mode_name() -> String:
-	return "RACE" if mode == Mode.RACE else "TIME TRIAL"
+	match mode:
+		Mode.CIRCUIT:
+			return "CIRCUIT"
+		Mode.TIME_TRIAL:
+			return "TIME TRIAL"
+		_:
+			return "TOUR"
 
 
 func _open_level_select() -> void:
 	state = State.LEVEL_SELECT
-	select_sel = level_index
-	menu.show_levels(level_names, select_sel,
-			"RACE" if mode == Mode.RACE else "TIME TRIAL")
+	var cat := _category_indices()
+	select_sel = maxi(cat.find(level_index), 0)
+	menu.show_levels(_category_names(), select_sel, _mode_name())
+
+
+## Levels belonging to the current mode: circuits for CIRCUIT, tours otherwise.
+func _category_indices() -> Array[int]:
+	var out: Array[int] = []
+	for i in range(level_paths.size()):
+		var is_circuit: bool = int(level_laps[i]) > 0
+		if (mode == Mode.CIRCUIT) == is_circuit:
+			out.append(i)
+	return out
+
+
+func _category_names() -> Array:
+	var out: Array = []
+	for i in _category_indices():
+		out.append(level_names[i])
+	return out
+
+
+## The next level within the current mode's category (wraps).
+func _next_in_category(global_idx: int, step: int) -> int:
+	var cat := _category_indices()
+	if cat.is_empty():
+		return global_idx
+	var pos := maxi(cat.find(global_idx), 0)
+	return cat[wrapi(pos + step, 0, cat.size())]
+
+
 
 
 func _level_select_frame(dt: float) -> void:
@@ -598,13 +663,12 @@ func _level_select_frame(dt: float) -> void:
 			or Input.is_action_just_pressed("p0_steer_left")):
 		moved = -1
 	if moved != 0:
-		select_sel = wrapi(select_sel + moved, 0, level_names.size())
+		select_sel = wrapi(select_sel + moved, 0, _category_indices().size())
 		Audio.play("menu_move")
-		menu.show_levels(level_names, select_sel,
-				"RACE" if mode == Mode.RACE else "TIME TRIAL")
+		menu.show_levels(_category_names(), select_sel, _mode_name())
 	if Input.is_action_just_pressed("ui_accept"):
 		Audio.play("menu_select")
-		_start_race(select_sel)
+		_start_race(_category_indices()[select_sel])
 	elif Input.is_action_just_pressed("ui_cancel"):
 		Audio.play("menu_move")
 		_open_player_select()
@@ -631,9 +695,13 @@ func _leaderboard_frame(dt: float) -> void:
 
 func _refresh_board() -> void:
 	var fname := String(level_paths[select_sel]).get_file()
-	menu.show_board(String(level_names[select_sel]),
-			Records.get_times(fname, "race"),
-			Records.get_times(fname, "time_trial"))
+	var columns: Array = []
+	if int(level_laps[select_sel]) > 0:
+		columns = [{"title": "CIRCUIT", "times": Records.get_times(fname, "circuit")}]
+	else:
+		columns = [{"title": "TOUR", "times": Records.get_times(fname, "race")},
+				{"title": "TIME TRIAL", "times": Records.get_times(fname, "time_trial")}]
+	menu.show_board(String(level_names[select_sel]), columns)
 
 
 ## Pre-race: racers held on the grid, traffic ambling, big 3-2-1 center
@@ -676,11 +744,20 @@ func _run_frame(dt: float) -> void:
 		_per_player_effects(i, dt)
 		_check_collisions(i)
 		if crossed:
-			_on_player_finish(i)
+			laps[i] += 1
+			if laps[i] >= total_laps():
+				_on_player_finish(i)
+			else:
+				# Lap line: refill the section timer and mark the lap.
+				if solo():
+					time_left += section_time
+					_last_beep_second = -1
+				Audio.play("checkpoint")
+				views[i].hud.set_flash("LAP %d / %d" % [laps[i] + 1, total_laps()])
 
 	_update_traffic(dt)
 	rivals.update(dt, self)
-	if solo() and mode == Mode.RACE:
+	if solo() and mode != Mode.TIME_TRIAL:
 		for e in rivals.events:
 			views[0].hud.set_flash(e)
 	_update_ranks_and_bars()
@@ -749,11 +826,15 @@ func _update_pickup_respawns(dt: float) -> void:
 
 func _update_ranks_and_bars() -> void:
 	var track_len := track.track_length()
+	var circuit := level.laps > 0
 	var rival_dots: Array = []
 	for r in rivals.rivals:
 		var def: Dictionary = SpriteCatalog.get_def(r.sprite)
-		rival_dots.append({"p": minf(float(r.z) / track_len, 1.0),
-				"color": def.get("map_color", Color.WHITE)})
+		var rp: float = fposmod(float(r.z), track_len) / track_len if circuit \
+				else minf(float(r.z) / track_len, 1.0)
+		if bool(r.finished):
+			rp = 1.0
+		rival_dots.append({"p": rp, "color": def.get("map_color", Color.WHITE)})
 	for i in range(views.size()):
 		var pi: int = views[i].renderer.player_index
 		var dots: Array = rival_dots.duplicate()
@@ -761,11 +842,15 @@ func _update_ranks_and_bars() -> void:
 			if j == pi:
 				continue
 			var pdef: Dictionary = SpriteCatalog.get_def("player_%d" % j)
-			dots.append({"p": minf(_effective_progress(j) / track_len, 1.0),
-					"color": pdef.get("map_color", Color.WHITE)})
+			var pp: float = minf(_effective_progress(j) / race_length(), 1.0)
+			if circuit and not finished[j]:
+				pp = players[j].position_z / track_len
+			dots.append({"p": pp, "color": pdef.get("map_color", Color.WHITE)})
 		views[i].hud.update_progress(players[pi].position_z / track_len, dots)
-		if mode == Mode.RACE or not solo():
+		if mode != Mode.TIME_TRIAL or not solo():
 			views[i].hud.set_position_rank(_rank_of(pi), _total_racers())
+		if level.laps > 0:
+			views[i].hud.set_lap(mini(laps[pi] + 1, total_laps()), total_laps())
 
 
 func _total_racers() -> int:
@@ -808,7 +893,11 @@ func _mark_finished(i: int, t: float) -> void:
 func _end_race() -> void:
 	state = State.STAGE_CLEAR
 	var fname := String(level_paths[level_index]).get_file()
-	var mode_key := "race" if mode == Mode.RACE else "time_trial"
+	var mode_key := "race"
+	if mode == Mode.CIRCUIT:
+		mode_key = "circuit"
+	elif mode == Mode.TIME_TRIAL:
+		mode_key = "time_trial"
 	var best_rank := -1
 	if solo() and finish_time[0] != INF:
 		best_rank = Records.add_time(fname, mode_key, finish_time[0])
@@ -876,9 +965,12 @@ func _merged_board() -> Array:
 # === CHECKPOINTS ===
 
 func _check_player_checkpoint(i: int, prev_z: float) -> void:
-	if next_cp[i] >= cp_zs.size():
+	if next_cp[i] >= total_cps():
 		return
-	var cp_z := cp_zs[next_cp[i]]
+	# Only this lap's checkpoints are eligible (indices run through laps).
+	if next_cp[i] / cp_zs.size() != laps[i]:
+		return
+	var cp_z := cp_zs[next_cp[i] % cp_zs.size()]
 	var p := players[i]
 	if prev_z < cp_z and p.position_z >= cp_z:
 		var hud: HudLayer = views[i].hud
@@ -891,12 +983,12 @@ func _check_player_checkpoint(i: int, prev_z: float) -> void:
 			next_cp[i] += 1
 			return
 		var leader_t := -1.0
-		if not rivals.leader_cp_times.is_empty():
+		if next_cp[i] < rivals.leader_cp_times.size():
 			leader_t = rivals.leader_cp_times[next_cp[i]]
 		var green := Color(0.35, 0.95, 0.4)
 		var red := Color(0.95, 0.3, 0.25)
-		if leader_t < 0.0 and mode == Mode.RACE:
-			var eta: float = rivals.next_rival_eta(cp_z)
+		if leader_t < 0.0 and mode != Mode.TIME_TRIAL:
+			var eta: float = rivals.next_rival_eta(cp_progress_z(next_cp[i]))
 			hud.set_flash("CHECKPOINT  -%s  (LEADER)"
 					% HudLayer.format_time(eta), green)
 		elif leader_t >= 0.0:

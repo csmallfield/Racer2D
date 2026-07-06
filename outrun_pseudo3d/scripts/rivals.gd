@@ -36,8 +36,7 @@ var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 func spawn(main: Node2D, count: int) -> void:
 	rivals.clear()
 	leader_cp_times.clear()
-	var cp_count: int = main.cp_zs.size()
-	for k in range(cp_count):
+	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
 	var n := clampi(count, 0, cfg.roster.size())
 	for i in range(n):
@@ -103,7 +102,8 @@ func update(dt: float, main: Node2D) -> void:
 			if not straight or float(r.boost) <= 0.0:
 				r.boosting = false
 		elif straight and float(r.boost) > 0.4 and float(r.air) < 10.0:
-			var sprinting := float(r.z) > track_len * cfg.final_sprint_fraction
+			var sprinting: bool = float(r.z) \
+					> float(main.race_length()) * cfg.final_sprint_fraction
 			var attacking := gap < 0.0 and gap > -cfg.boost_attack_range
 			if (sprinting or attacking) \
 					and randf() < float(r.aggression) * dt * 2.0:
@@ -174,14 +174,15 @@ func update(dt: float, main: Node2D) -> void:
 					r.bonk_t = cfg.bonk_cooldown
 					break
 
-		# --- Checkpoint and finish times (race clock read from main). ---
-		var cp_zs: Array[float] = main.cp_zs
-		while int(r.next_cp) < cp_zs.size() and float(r.z) >= cp_zs[int(r.next_cp)]:
+		# --- Checkpoint and finish times, lap-aware: checkpoint indices run
+		# through every lap (index -> lap * per-lap-count + local). ---
+		while int(r.next_cp) < leader_cp_times.size() \
+				and float(r.z) >= main.cp_progress_z(int(r.next_cp)):
 			var k: int = int(r.next_cp)
 			if leader_cp_times[k] < 0.0 or float(main.race_time) < leader_cp_times[k]:
 				leader_cp_times[k] = float(main.race_time)
 			r.next_cp = k + 1
-		if not bool(r.finished) and float(r.z) >= track_len:
+		if not bool(r.finished) and float(r.z) >= main.race_length():
 			r.finished = true
 			r.finish_time = float(main.race_time)
 

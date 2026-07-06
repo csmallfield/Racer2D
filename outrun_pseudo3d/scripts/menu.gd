@@ -68,18 +68,19 @@ func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 	_content.text = rows
 
 
-## Best-times board for one stage: race and time-trial columns side by side.
-func show_board(stage_name: String, race_times: Array, tt_times: Array) -> void:
+## Best-times board for one stage. columns: [{title, times}] — tour stages
+## show TOUR + TIME TRIAL side by side, circuits a single CIRCUIT column.
+func show_board(stage_name: String, columns: Array) -> void:
 	visible = true
 	_title_label.text = "BEST TIMES"
 	var rows := "[center][b]%s[/b]\n" % stage_name
 	rows += "[color=#888888]steer to change stage  •  brake for menu[/color]\n\n[/center]"
-	rows += "[table=4]"
-	rows += "[cell][color=#ffd24d]  RACE[/color][/cell][cell][/cell]"
-	rows += "[cell][color=#ffd24d]  TIME TRIAL[/color][/cell][cell][/cell]"
+	rows += "[table=%d]" % (columns.size() * 2)
+	for col in columns:
+		rows += "[cell][color=#ffd24d]  %s[/color][/cell][cell][/cell]" % String(col.title)
 	for i in range(Records.MAX_ENTRIES):
-		rows += _time_cell(i, race_times)
-		rows += _time_cell(i, tt_times)
+		for col in columns:
+			rows += _time_cell(i, col.times)
 	rows += "[/table]"
 	_content.text = rows
 

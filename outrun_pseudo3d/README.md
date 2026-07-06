@@ -201,19 +201,23 @@ the roster; levels' `rival_count` takes the first N.
 
 ## Menu, modes, and best times
 
-The game boots to a title menu (over an idle stage backdrop): **RACE**
-(you versus the rival pack), **TIME TRIAL** (no rivals — you, the traffic,
-and the clock), **BEST TIMES**, and QUIT. Menus navigate with arrows /
-d-pad and confirm with Enter / Space / gamepad A; Esc backs out, including
-from a running race.
+The game boots to a title menu (over an idle stage backdrop) with three ways
+to race: **TOUR** (point-to-point stages versus the rival pack — the
+original mode), **CIRCUIT** (short looping tracks raced over 3 laps; the
+turn bias makes each feel like a real ring, you can lap slower opponents,
+and the finish line refills the section timer every lap — `time_limit` in a
+circuit level is the per-lap allotment), and **TIME TRIAL** (tour stages,
+no rivals). Plus BEST TIMES, SETTINGS, and QUIT. Each mode picks a player
+count and then a stage from its own catalog: tours and circuits are
+separate lists, split by the `laps` property in the level script (0 = tour,
+>0 = circuit) — a new circuit is just a level file with `laps = 3`.
 
-Both modes go through a stage picker. Finishing any stage records your time
-to a persistent per-stage, per-mode top-10 (saved as JSON in `user://`),
-browsable from BEST TIMES (steer to flip through stages). Race finishes show
-the race results board (with "BEST #n" in the title when you set one); time
-trial finishes show the stage's all-time top 10 with your run highlighted.
-In time trial the checkpoint flash has no delta — there's nobody to be
-behind.
+Finishing records a persistent per-stage top-10 in the matching mode
+column (TOUR, TIME TRIAL, or CIRCUIT — circuit times are full multi-lap
+totals), browsable from BEST TIMES. Race finishes show the results board;
+time-trial finishes show the stage's all-time top 10 with your run
+highlighted. Menus navigate with arrows / d-pad, confirm with Enter /
+Space / gamepad A; Esc backs out, including from a running race.
 
 ## Driving techniques and race HUD
 

@@ -48,6 +48,30 @@ static func _build_all() -> void:
 		"texture": _make_boost_canister(),
 		"world_w": 240.0, "world_h": 300.0, "collidable": false,
 	}
+	_cache["building"] = {
+		"texture": _make_building(Color(0.16, 0.17, 0.24), Color(0.95, 0.85, 0.4)),
+		"world_w": 2200.0, "world_h": 5200.0, "collidable": true,
+	}
+	_cache["building_2"] = {
+		"texture": _make_building(Color(0.2, 0.14, 0.22), Color(0.4, 0.85, 0.95)),
+		"world_w": 1800.0, "world_h": 3800.0, "collidable": true,
+	}
+	_cache["streetlight"] = {
+		"texture": _make_streetlight(),
+		"world_w": 260.0, "world_h": 1500.0, "collidable": false,
+	}
+	_cache["dead_tree"] = {
+		"texture": _make_dead_tree(),
+		"world_w": 1100.0, "world_h": 1900.0, "collidable": true,
+	}
+	_cache["pumpkin"] = {
+		"texture": _make_pumpkin(),
+		"world_w": 420.0, "world_h": 340.0, "collidable": true,
+	}
+	_cache["lollipop"] = {
+		"texture": _make_lollipop(),
+		"world_w": 700.0, "world_h": 1600.0, "collidable": true,
+	}
 	_cache["tree"] = {
 		"texture": _make_tree(Color(0.09, 0.42, 0.16), Color(0.35, 0.22, 0.1)),
 		"world_w": 1300.0, "world_h": 2300.0, "collidable": true,
@@ -195,6 +219,48 @@ static func _make_boost_canister() -> ImageTexture:
 	img.fill_rect(Rect2i(14, 12, 20, 38), Color(1.0, 0.8, 0.2))
 	img.fill_rect(Rect2i(18, 0, 12, 10), Color(0.85, 0.9, 0.95))
 	img.fill_rect(Rect2i(20, 20, 8, 22), Color(1.0, 0.98, 0.85))
+	return _to_texture(img)
+
+
+## Bare, twisted silhouette for the Halloween stage.
+static func _make_dead_tree() -> ImageTexture:
+	var img := _new_image(64, 96)
+	var bark := Color(0.12, 0.09, 0.11)
+	img.fill_rect(Rect2i(28, 40, 8, 56), bark)
+	img.fill_rect(Rect2i(20, 26, 6, 26), bark)
+	img.fill_rect(Rect2i(12, 14, 5, 18), bark)
+	img.fill_rect(Rect2i(38, 20, 6, 30), bark)
+	img.fill_rect(Rect2i(44, 8, 5, 18), bark)
+	img.fill_rect(Rect2i(30, 6, 5, 38), bark)
+	return _to_texture(img)
+
+
+## Squat jack-o'-lantern.
+static func _make_pumpkin() -> ImageTexture:
+	var img := _new_image(48, 40)
+	var body := Color(0.95, 0.45, 0.05)
+	img.fill_rect(Rect2i(4, 10, 40, 28), body)
+	img.fill_rect(Rect2i(2, 16, 44, 16), body)
+	img.fill_rect(Rect2i(21, 2, 6, 10), Color(0.25, 0.4, 0.1))
+	var glow := Color(1.0, 0.9, 0.3)
+	img.fill_rect(Rect2i(12, 18, 6, 6), glow)
+	img.fill_rect(Rect2i(30, 18, 6, 6), glow)
+	img.fill_rect(Rect2i(14, 28, 20, 5), glow)
+	return _to_texture(img)
+
+
+## Giant swirl lollipop on a white stick.
+static func _make_lollipop() -> ImageTexture:
+	var img := _new_image(56, 128)
+	img.fill_rect(Rect2i(25, 52, 6, 76), Color(0.98, 0.98, 0.98))
+	var c := Vector2(28, 28)
+	for y in range(0, 56):
+		for x in range(0, 56):
+			var d := Vector2(x, y).distance_to(c)
+			if d <= 26.0:
+				var swirl := fposmod(atan2(float(y) - c.y, float(x) - c.x) * 2.0 + d * 0.45, TAU)
+				img.set_pixel(x, y, Color(0.95, 0.2, 0.45) if swirl < PI
+						else Color(0.99, 0.95, 0.97))
 	return _to_texture(img)
 
 

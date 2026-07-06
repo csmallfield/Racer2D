@@ -14,6 +14,9 @@ const SEGMENT_LENGTH := 200.0   # world units per segment
 const RUMBLE_LENGTH := 3        # segments per light/dark stripe
 
 ## Handy preset values, mirroring classic pseudo-3D tuning.
+# v25 piece sizes: corners and hills stay short, punchy events — tracks get
+# their length from MORE pieces, never from stretching individual ones
+# (long grinding corners are where racing goes to die).
 const ROAD := {
 	"LENGTH": {"NONE": 0, "SHORT": 25, "MEDIUM": 50, "LONG": 100},
 	"CURVE": {"NONE": 0.0, "EASY": 2.0, "MEDIUM": 4.0, "HARD": 6.0},

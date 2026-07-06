@@ -6,6 +6,7 @@ extends Node
 var player: PlayerSettings
 var camera: CameraSettings
 var race: RaceSettings
+var retro: RetroFilterSettings
 
 
 func _init() -> void:
@@ -18,6 +19,9 @@ func _init() -> void:
 	race = _load_res("res://resources/race_settings.tres") as RaceSettings
 	if race == null:
 		race = RaceSettings.new()
+	retro = _load_res("res://resources/retro_filter.tres") as RetroFilterSettings
+	if retro == null:
+		retro = RetroFilterSettings.new()
 
 
 func _load_res(path: String) -> Resource:

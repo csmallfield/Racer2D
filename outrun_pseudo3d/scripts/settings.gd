@@ -10,12 +10,17 @@ const SHADER := "res://assets/shaders/retro_screen.gdshader"
 var fullscreen := false
 var music_volume := 1.0        # 0..1 linear
 var sfx_volume := 1.0
+# Seeded from resources/retro_filter.tres (designer defaults); the menu
+# subset is then overridden by the user save. Flicker and scanline density
+# are resource-only.
 var crt_enabled := false
 var crt_curvature := 0.04
 var crt_scanlines := 0.3
 var crt_fringe := 1.4          # chromatic aberration, px
 var crt_vignette := 0.25
 var crt_noise := 0.05
+var crt_flicker := 0.02
+var crt_density := 540.0
 
 var _layer: CanvasLayer
 var _rect: ColorRect
@@ -33,6 +38,15 @@ func _ready() -> void:
 	_mat.shader = load(SHADER)
 	_rect.material = _mat
 	_layer.add_child(_rect)
+	var d: RetroFilterSettings = GameConfig.retro
+	crt_enabled = d.enabled_by_default
+	crt_curvature = d.curvature
+	crt_scanlines = d.scanlines
+	crt_fringe = d.fringe
+	crt_vignette = d.vignette
+	crt_noise = d.noise
+	crt_flicker = d.flicker
+	crt_density = d.scanline_density
 	_load()
 	apply()
 
@@ -44,7 +58,8 @@ func apply() -> void:
 	_mat.set_shader_parameter("aberration", crt_fringe)
 	_mat.set_shader_parameter("vignette", crt_vignette)
 	_mat.set_shader_parameter("noise_strength", crt_noise)
-	_mat.set_shader_parameter("flicker", crt_noise * 0.4)
+	_mat.set_shader_parameter("flicker", crt_flicker)
+	_mat.set_shader_parameter("scanline_density", crt_density)
 	DisplayServer.window_set_mode(
 			DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen
 			else DisplayServer.WINDOW_MODE_WINDOWED)

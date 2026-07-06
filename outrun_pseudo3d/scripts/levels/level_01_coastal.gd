@@ -6,8 +6,8 @@ extends TrackLevel
 
 func _init() -> void:
 	level_name = "STAGE 1 — COASTAL RUN"
-	time_limit = 80.0
-	traffic_count = 12
+	time_limit = 320.0
+	traffic_count = 48
 	music = "music_coastal"
 	theme = {
 		"sky_top": Color(0.12, 0.35, 0.82),
@@ -29,21 +29,66 @@ func _init() -> void:
 
 func build(b: TrackBuilder) -> void:
 	var R := TrackBuilder.ROAD
+	# Breezy, rolling, v25 rhythm x4: short punchy events, never a grind.
 
-	# --- Road layout ---
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.MEDIUM)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.LOW)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.EASY, -R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_curve(R.LENGTH.LONG, R.CURVE.EASY)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_s_curves()
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_hill(R.LENGTH.MEDIUM, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_s_curves()
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_hill(R.LENGTH.MEDIUM, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.LOW)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.EASY, -R.HILL.LOW)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.MEDIUM)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_curve(R.LENGTH.LONG, R.CURVE.EASY)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.MEDIUM)
 	b.add_straight(R.LENGTH.SHORT)
 	b.add_low_rolling_hills()
 	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM, R.HILL.LOW)
-	b.add_straight(R.LENGTH.MEDIUM)
-	b.add_s_curves()
-	b.add_hill(R.LENGTH.MEDIUM, R.HILL.HIGH)
-	b.add_curve(R.LENGTH.LONG, -R.CURVE.MEDIUM)
-	b.add_hill(R.LENGTH.SHORT, -R.HILL.MEDIUM)
-	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.LOW)
+	b.add_curve(R.LENGTH.LONG, R.CURVE.EASY)
 	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, R.HILL.LOW)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.EASY, -R.HILL.LOW)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_hill(R.LENGTH.MEDIUM, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_hill(R.LENGTH.SHORT, R.HILL.HIGH)
+	b.add_hill(R.LENGTH.SHORT, -R.HILL.HIGH)
+	b.add_s_curves()
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, R.HILL.LOW)
+	b.add_hill(R.LENGTH.MEDIUM, R.HILL.HIGH)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
 	b.add_downhill_to_end()
 
-	# --- Scenery ---
 	var end := b.segments.size()
 	b.add_scenery("palm", 20, end, 6, 1.0)
 	b.add_scenery("palm", 25, end, 7, -1.0)

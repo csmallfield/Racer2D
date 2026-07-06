@@ -34,5 +34,5 @@ boost_curve_threshold = 1.0
 boost_attack_range = 6000.0
 final_sprint_fraction = 0.85
 pickup_boost_amount = 1.5
-pickup_respawn = 15.0
-auto_pickup_count = 6
+pickup_respawn = 25.0
+auto_pickup_count = 4

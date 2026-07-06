@@ -11,6 +11,7 @@ var stage_label: Label
 var message_label: Label
 var hint_label: Label
 var position_label: Label
+var lap_label: Label
 var flash_label: Label
 var race_time_label: Label
 var board_bg: ColorRect
@@ -35,6 +36,8 @@ func _ready() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
 	message_label = _make_label(Vector2(0, 420), Vector2(1920, 150), 84,
 			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
+	lap_label = _make_label(Vector2(1284, 906), Vector2(600, 60), 40,
+			HORIZONTAL_ALIGNMENT_RIGHT, Color(0.9, 0.9, 0.95))
 	position_label = _make_label(Vector2(1284, 966), Vector2(600, 84), 60,
 			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
 	flash_label = _make_label(Vector2(0, 570), Vector2(1920, 60), 39,
@@ -93,10 +96,15 @@ func set_message(text: String) -> void:
 ## Reset per-race HUD elements (position, flash) between modes/menu.
 func clear_race_ui() -> void:
 	position_label.text = ""
+	lap_label.text = ""
 	flash_label.text = ""
 	_flash_t = 0.0
 	hide_progress()
 	boost_bar.visible = false
+
+
+func set_lap(current: int, total: int) -> void:
+	lap_label.text = "LAP %d / %d" % [current, total]
 
 
 func set_position_rank(rank: int, total: int) -> void:

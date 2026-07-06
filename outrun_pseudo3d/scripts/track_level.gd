@@ -15,7 +15,11 @@ var level_name := "UNNAMED STAGE"
 var time_limit := 70.0       # total seconds, split evenly per checkpoint section
 var traffic_count := 10      # number of NPC cars on the track
 var rival_count := 9         # AI opponents racing you (max 9); rank shows N+1 total
-var checkpoint_count := 2    # evenly spaced; time_limit is split across sections
+var checkpoint_count := 11   # evenly spaced; time_limit is split across sections
+## 0 = point-to-point tour stage. >0 = circuit: the track loops this many
+## laps, the finish line refills the section timer each lap, and time_limit
+## is the PER-LAP allotment. Circuits appear only in Circuit mode.
+var laps := 0
 var music := ""              # sound name in assets/audio/, e.g. "music_coastal"
 
 ## Colors used by the renderer. Override any/all of these per level.

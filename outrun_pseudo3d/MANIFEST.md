@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v25
+# Delivery Manifest — outrun_pseudo3d v29
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -25,12 +25,21 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_04_city.gd | ~60 | Stage 4: flat street grid, hard corners, heavy traffic, skyline |
 | scripts/levels/level_05_jungle.gd | ~60 | Stage 5: winding hilly dirt road, dense canopy, green haze |
 | scripts/levels/level_06_mountains.gd | ~60 | Stage 6: 2x-extreme hills, ballistic crests, alpine palette |
+| scripts/levels/level_07_halloween.gd | ~55 | Stage 7: creepy fog, dead trees, pumpkins, twisty |
+| scripts/levels/level_08_candy.gd | ~55 | Stage 8: candy land, lollipop forest, bouncy hills |
+| scripts/levels/level_09..11_circuit_*.gd | ~60 ea | Circuits: Seaside Ring, Neon Loop, Sugar Ring (3 laps each) |
 | scripts/levels/level_01_coastal.gd | 56 | Stage 1 (reference example): rolling hills, S-curves, palms, daytime palette |
 | scripts/levels/level_02_desert.gd | 53 | Stage 2: harder curves, bigger elevation, more traffic, dusk palette |
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v25 adds a settings menu (fullscreen, music/SFX volume via a dedicated Music bus, persisted to user://settings.json) and a custom full-resolution retro/VHS screen shader — luminance-preserving scanlines, chromatic fringe, animated grain + flicker, vignette, optional barrel distortion — applied over the whole window via a Settings autoload, every look parameter tunable live from the menu.
+v29 fixes the v26 track scaling, which stretched individual pieces (10-second grinding corners where the AI's flat curve-speed advantage shows). Piece presets revert to v25 sizes; every level (tours, circuits, halloween, candy) is re-authored to the same ~4x total length via MORE v25-scale sections — short punchy corners and hills, straights as braking zones before hard corners, the occasional long climb for scale (mountains keeps its 2x-preset ballistic crests). Boost economy rebalanced: pickup density cut ~4x (one per ~450 segments), respawn 15->25s, so the leader can't stay permanently fueled.
+
+Previously: v27 adds CIRCUIT mode: the original mode is renamed TOUR; circuits are short, turn-biased looping tracks raced over laps (laps property on TrackLevel; time_limit = per-lap), with lap counting, lap-line timer refills, lap-aware checkpoint splits, lapping of opponents via total-progress ranking, per-lap progress-bar positions, LAP x/y HUD, circuit best-times column, and three new circuits reusing existing themes: Seaside Ring (left-biased), Neon Loop (right-biased), Sugar Ring (left-biased, bouncy).
+
+Previously: v26: retro filter defaults move to resources/retro_filter.tres (incl. resource-only flicker + scanline density); all tracks scaled 4x with slopes exactly preserved (LENGTH and HILL presets x4, mountain literals x4, downhill span x4, checkpoints 2->11 keeping identical section rhythm, time limits and traffic x4, density-based pickup scatter); two new stages: Hollow Ridge (Halloween — blood moon, dead trees, jack-o'-lanterns, dense fog, twisty) and Sugar Rush (candy land — lollipop forest, candy-stripe rumbles, bouncy hills).
+
+Previously: v25 adds a settings menu (fullscreen, music/SFX volume via a dedicated Music bus, persisted to user://settings.json) and a custom full-resolution retro/VHS screen shader — luminance-preserving scanlines, chromatic fringe, animated grain + flicker, vignette, optional barrel distortion — applied over the whole window via a Settings autoload, every look parameter tunable live from the menu.
 
 Previously: v24 adds 2/4-player local split screen: SubViewport per player (uniform even solo) each with its own renderer, camera, and scale-aware HUD; per-player input actions (P1 WASD+Shift, P2 Arrows+Ctrl, P3/P4 pads); players mirrored as world car entities so player-vs-player collisions, mutual slipstream, and AI avoidance reuse the traffic code paths; player liveries + progress-bar markers; MP drops the countdown timer (pure race, 20s finish grace, merged results boards); per-view draw distance scaling; records solo-only.
 

@@ -7,8 +7,8 @@ extends TrackLevel
 
 func _init() -> void:
 	level_name = "STAGE 6 — ROCKY MOUNTAINS"
-	time_limit = 95.0
-	traffic_count = 8
+	time_limit = 380.0
+	traffic_count = 32
 	music = "music_mountain"
 	theme = {
 		"sky_top": Color(0.45, 0.6, 0.8),
@@ -30,22 +30,79 @@ func _init() -> void:
 
 func build(b: TrackBuilder) -> void:
 	var R := TrackBuilder.ROAD
-	# Hill values are 2x the standard presets (LOW/MEDIUM/HIGH = 20/40/60):
-	# 40/80/120 makes crests genuinely ballistic at speed.
+	# Hill values are 2x the presets (LOW/MEDIUM/HIGH = 20/40/60):
+	# 40/80/120 keeps crests genuinely ballistic. Short punchy climbs and
+	# crest jumps, a long monster now and then, straights before the drops.
 
 	b.add_straight(R.LENGTH.SHORT)
-	b.add_hill(R.LENGTH.MEDIUM, 80)                          # first big climb
-	b.add_curve(R.LENGTH.LONG, R.CURVE.EASY, 40)             # sweeping high pass
-	b.add_hill(R.LENGTH.SHORT, 60)                           # sharp crest — jump
-	b.add_hill(R.LENGTH.MEDIUM, -120)                        # plunging descent
-	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
-	b.add_hill(R.LENGTH.LONG, 120)                           # the monster climb
-	b.add_hill(R.LENGTH.SHORT, -60)                          # crest over the top
-	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.HARD, -40)          # downhill hard corner
+	b.add_hill(R.LENGTH.LONG, 120)
+	b.add_hill(R.LENGTH.SHORT, -60)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.HARD, -40)
+	b.add_straight(R.LENGTH.SHORT)
 	b.add_low_rolling_hills()
+	b.add_hill(R.LENGTH.SHORT, 80)
+	b.add_hill(R.LENGTH.SHORT, -80)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_hill(R.LENGTH.MEDIUM, 80)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, 40)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_hill(R.LENGTH.MEDIUM, 100)
+	b.add_hill(R.LENGTH.SHORT, -100)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_hill(R.LENGTH.LONG, 120)
+	b.add_hill(R.LENGTH.SHORT, -60)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.HARD, -40)
+	b.add_hill(R.LENGTH.MEDIUM, 100)
+	b.add_hill(R.LENGTH.SHORT, -100)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_low_rolling_hills()
+	b.add_hill(R.LENGTH.MEDIUM, 80)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, 40)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_hill(R.LENGTH.SHORT, 80)
+	b.add_hill(R.LENGTH.SHORT, -80)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_hill(R.LENGTH.MEDIUM, 100)
+	b.add_hill(R.LENGTH.SHORT, -100)
+	b.add_hill(R.LENGTH.LONG, 120)
+	b.add_hill(R.LENGTH.SHORT, -60)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.HARD, -40)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_low_rolling_hills()
+	b.add_hill(R.LENGTH.SHORT, 80)
+	b.add_hill(R.LENGTH.SHORT, -80)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_hill(R.LENGTH.MEDIUM, 80)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.EASY, 40)
+	b.add_hill(R.LENGTH.SHORT, 60)
+	b.add_hill(R.LENGTH.MEDIUM, -120)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_low_rolling_hills()
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM, 40)
+	b.add_straight(R.LENGTH.SHORT)
 	b.add_downhill_to_end()
 
-	# --- Scenery: rock everywhere, hardy trees in the valleys ---
 	var end := b.segments.size()
 	b.add_scenery("rock", 8, end, 9, 1.0, 1.3, 2.4)
 	b.add_scenery("rock", 13, end, 11, -1.0, 1.3, 2.4)

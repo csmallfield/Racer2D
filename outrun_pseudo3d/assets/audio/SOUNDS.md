@@ -19,6 +19,8 @@ of import settings.
 | `music_jungle` | Stage 5 background music. Percussive, humid, driving. |
 | `music_menu` | Title menu loop. Sets the tone for the whole game — attract-mode energy. |
 | `music_mountain` | Stage 6 background music. Soaring, wide-open — big-sky driving. |
+| `music_halloween` | Stage 7 background music. Creepy — minor-key synth, distant howls welcome. |
+| `music_candy` | Stage 8 background music. Saccharine, bouncy, relentlessly cheerful. |
 
 New stages reference music by name (`music = "music_whatever"` in the level
 script) — add matching files here. Stages whose named track is missing (or

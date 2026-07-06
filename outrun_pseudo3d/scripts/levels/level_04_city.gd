@@ -6,8 +6,8 @@ extends TrackLevel
 
 func _init() -> void:
 	level_name = "STAGE 4 — NEON CITY"
-	time_limit = 85.0
-	traffic_count = 20
+	time_limit = 340.0
+	traffic_count = 80
 	music = "music_city"
 	theme = {
 		"sky_top": Color(0.1, 0.02, 0.18),
@@ -29,20 +29,47 @@ func _init() -> void:
 
 func build(b: TrackBuilder) -> void:
 	var R := TrackBuilder.ROAD
+	# Street grid: straights are braking zones, corners are walls.
 
-	# --- Road layout: a flat street grid — straights into hard corners ---
+	b.add_straight(R.LENGTH.SHORT)
 	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_straight(R.LENGTH.LONG)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_straight(R.LENGTH.SHORT)
 	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
 	b.add_straight(R.LENGTH.SHORT)
 	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
 	b.add_straight(R.LENGTH.MEDIUM)
 	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM)
+	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.MEDIUM)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_straight(R.LENGTH.LONG)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
+	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_straight(R.LENGTH.SHORT)
+	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_straight(R.LENGTH.SHORT)
 	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
 	b.add_straight(R.LENGTH.SHORT)
 	b.add_curve(R.LENGTH.SHORT, R.CURVE.HARD)
+	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_straight(R.LENGTH.MEDIUM)
+	b.add_curve(R.LENGTH.MEDIUM, -R.CURVE.MEDIUM)
+	b.add_straight(R.LENGTH.LONG)
+	b.add_curve(R.LENGTH.SHORT, -R.CURVE.HARD)
 	b.add_straight(R.LENGTH.LONG)
 
-	# --- Scenery: skyline walls, streetlights metronoming past ---
 	var end := b.segments.size()
 	b.add_scenery("building", 10, end, 14, 1.0, 2.2, 3.6)
 	b.add_scenery("building_2", 16, end, 17, -1.0, 2.0, 3.4)
