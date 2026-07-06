@@ -11,6 +11,20 @@ var _dim: ColorRect
 var _title_label: Label
 var _content: RichTextLabel
 
+const LIST_HEIGHT := 660.0   # content box height; rows adapt to fit
+
+
+## Fit n rows into the content box: font shrinks and spacing tightens as
+## lists grow, so nothing ever renders off the bottom of the screen.
+func _fit_list(n: int, spaced: bool) -> String:
+	var per_row := LIST_HEIGHT / maxf(float(n) + 2.0, 1.0)
+	if spaced:
+		per_row *= 0.55
+	var size := clampi(int(per_row * 0.62), 24, 45)
+	_content.add_theme_font_size_override("normal_font_size", size)
+	_content.add_theme_font_size_override("bold_font_size", size)
+	return "\n\n" if spaced and n <= 5 else "\n"
+
 
 func _ready() -> void:
 	_dim = ColorRect.new()
@@ -50,10 +64,11 @@ func show_main(items: Array[String], sel: int) -> void:
 func show_list(title: String, items: Array[String], sel: int) -> void:
 	visible = true
 	_title_label.text = title
-	var rows := "\n\n[center]"
+	var gap := _fit_list(items.size(), true)
+	var rows := "\n[center]"
 	for i in range(items.size()):
-		rows += _row(items[i], i == sel) + "\n\n"
-	rows += "[color=#888888]steer/accelerate to choose[/color][/center]"
+		rows += _row(items[i], i == sel) + gap
+	rows += "[color=#888888]select with Enter / gamepad A[/color][/center]"
 	_content.text = rows
 
 
@@ -61,10 +76,11 @@ func show_list(title: String, items: Array[String], sel: int) -> void:
 func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 	visible = true
 	_title_label.text = mode_name
-	var rows := "\n\n[center][color=#aaaaaa]SELECT STAGE[/color]\n\n"
+	var gap := _fit_list(stage_names.size() + 2, false)
+	var rows := "\n[center][color=#aaaaaa]SELECT STAGE[/color]" + gap
 	for i in range(stage_names.size()):
-		rows += _row(String(stage_names[i]), i == sel) + "\n"
-	rows += "\n[color=#888888]accelerate to start  •  brake for menu[/color][/center]"
+		rows += _row(String(stage_names[i]), i == sel) + gap
+	rows += "[color=#888888]Enter / gamepad A to start  •  Esc / B for menu[/color][/center]"
 	_content.text = rows
 
 

@@ -1,4 +1,4 @@
-# Delivery Manifest — outrun_pseudo3d v31
+# Delivery Manifest — outrun_pseudo3d v33
 
 Full drop-in Godot 4.7 project. Open the folder in Godot and press Play.
 All files verified against source; all .gd files parse-checked with gdtoolkit.
@@ -33,7 +33,9 @@ All files verified against source; all .gd files parse-checked with gdtoolkit.
 | scripts/levels/level_03_night.gd | ~55 | Stage 3: night palette, long twin-road fork section, hard corner |
 | README.md | — | Controls, rendering explanation, level authoring guide, art replacement guide, tuning table |
 
-v31 hardens the AI substantially: the hunter is REPLACED by pack momentum (a capped per-nearby-rival speed bonus — the fake extension of drafting; trains and splinter groups bridge to lone leaders); cruise ladder raised past the player (0.94-1.03, VIPER faster than your flat-out); per-race form variance (+/-2.5% rolled at the grid, finish order varies); rubber clamp 0.99->1.0, rubber_behind 1.08, range 9000; sharper cornering (slowdown 0.028, cap 0.2, lookahead 40, dodge_rate 1.5); boost capacity 4s + aggression ladder 0.4-1.0, attack range 10000, sprint from 80%.
+v32 polish four-pack: (1) menus adapt row size/spacing to fit — long lists (settings, stage picker) never render offscreen; ui_accept gains gamepad A and ui_cancel gains B. (2) Renderer world scaling is aspect-locked to 16:9 of view height (_ref_w): 2P wide views keep the exact 1P composition with the extra width as peripheral view; 1P/4P mathematically unchanged. New 3P mode: two quadrants + one wide bottom view, per-view draw distance by view size. (3) The local player is depth-interleaved into the painter's pass at his true distance — cars between camera and player now correctly draw on top. (4) Contact physics: rear shunts (faster cars slam you forward, they scrub) and side-swipes (near-pace lateral contact shoves both apart) vs traffic, rivals, and other players via mirrors.
+
+Previously: v31 hardens the AI substantially: the hunter is REPLACED by pack momentum (a capped per-nearby-rival speed bonus — the fake extension of drafting; trains and splinter groups bridge to lone leaders); cruise ladder raised past the player (0.94-1.03, VIPER faster than your flat-out); per-race form variance (+/-2.5% rolled at the grid, finish order varies); rubber clamp 0.99->1.0, rubber_behind 1.08, range 9000; sharper cornering (slowdown 0.028, cap 0.2, lookahead 40, dodge_rate 1.5); boost capacity 4s + aggression ladder 0.4-1.0, attack range 10000, sprint from 80%.
 
 Previously: v30 is the AI challenge package: rivals draft (player slipstream physics off traffic/each other/player mirrors, applied after the rubber clamp — the honest gap-closer), smarter boost AI (corner-exit bursts at 2x take-rate, gap-closing when far behind), pickup seeking (hungry rivals steer for canisters ahead), the hunter (lead too long and the fastest surviving rival gets +2.5% and max aggression, announced by name, until they retake the lead), and rhythmic traffic (packs, loners, 3-abreast rolling roadblocks; counts +50%). New RaceSettings groups: Hunter, Traffic Placement.
 

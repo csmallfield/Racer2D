@@ -29,6 +29,10 @@ var hill_offset := 0.0           # background parallax scroll (driven by main)
 var last_cam_y := 0.0            # camera altitude this frame (projects the player)
 var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
 var _shake_t := 0.0              # boost-ignition camera shake remaining
+var _ref_w := 1920.0             # aspect-locked width (16:9 of height): ALL
+                                 # world scaling uses this, so wide viewports
+                                 # (2P split) keep the 1P composition and the
+                                 # extra width becomes pure peripheral view.
 
 
 ## Distance from camera to the player car along z.
@@ -55,9 +59,9 @@ func _draw() -> void:
 	if main == null or main.track == null or main.track.segments.is_empty():
 		return
 	var vp := get_viewport_rect().size
+	_ref_w = minf(vp.x, vp.y * 16.0 / 9.0)
 	_draw_background(vp.x, vp.y)
 	_draw_road_and_sprites(vp.x, vp.y)
-	_draw_player(vp.x, vp.y)
 
 
 # === BACKGROUND ===
@@ -95,9 +99,9 @@ func _project(p: Dictionary, cam_x: float, cam_y: float, cam_z: float, w: float,
 	var z: float = max(p.camera.z, 0.0001)
 	p.screen.scale = camera_depth / z
 	# Rounding avoids sub-pixel seam lines between adjacent road slices.
-	p.screen.x = roundf(w * 0.5 + p.screen.scale * p.camera.x * w * 0.5)
+	p.screen.x = roundf(w * 0.5 + p.screen.scale * p.camera.x * _ref_w * 0.5)
 	p.screen.y = roundf(h * 0.5 - p.screen.scale * p.camera.y * h * 0.5)
-	p.screen.w = roundf(p.screen.scale * ROAD_WIDTH * w * 0.5)
+	p.screen.w = roundf(p.screen.scale * ROAD_WIDTH * _ref_w * 0.5)
 
 
 func _fog_amount(n: int) -> float:
@@ -161,29 +165,45 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 		_draw_segment(seg, w, _fog_amount(n), th)
 		maxy = seg.p2.screen.y
 
-	# --- Pass 2: sprites and cars, back to front (painter's algorithm). ---
+	# --- Pass 2: sprites and cars, back to front (painter's algorithm).
+	# The local player is interleaved at his TRUE depth (player_z() ahead
+	# of the camera), so a car spatially between the camera and the player
+	# correctly draws on top of him instead of vanishing behind. ---
+	var player_rel: int = int(fposmod(float(main.find_segment(fposmod(
+			player.position_z + player_z(), track_len)).index - base.index),
+			float(seg_count)))
+	var player_drawn := false
 	for n in range(draw_distance - 1, 0, -1):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
 		var fog := _fog_amount(n)
 		var fog_mod := Color.WHITE.lerp(th.fog, fog * 0.8)
 
-		for car in seg.cars:
-			if int(car.get("pidx", -1)) == player_index:
-				continue   # this view's own player is drawn locally
-			var percent := fposmod(car.z, seg_len) / seg_len
-			var sc := lerpf(seg.p1.screen.scale, seg.p2.screen.scale, percent)
-			var sx: float = lerpf(seg.p1.screen.x, seg.p2.screen.x, percent) \
-					+ sc * float(car.offset) * ROAD_WIDTH * w * 0.5
-			var sy := lerpf(seg.p1.screen.y, seg.p2.screen.y, percent)
-			var air_px: float = minf(float(car.air) * sc * h * 0.5, h * 0.35)
-			_draw_sprite(car.sprite, sc, sx, sy, seg.clip, w, fog_mod, air_px)
+		if n == player_rel:
+			var pdist := player_z()
+			for car in seg.cars:
+				if int(car.get("pidx", -1)) == player_index:
+					continue
+				if fposmod(float(car.z) - player.position_z, track_len) > pdist:
+					_draw_world_car(car, seg, fog_mod, w, h)
+			_draw_player(w, h)
+			player_drawn = true
+			for car in seg.cars:
+				if int(car.get("pidx", -1)) == player_index:
+					continue
+				if fposmod(float(car.z) - player.position_z, track_len) <= pdist:
+					_draw_world_car(car, seg, fog_mod, w, h)
+		else:
+			for car in seg.cars:
+				if int(car.get("pidx", -1)) == player_index:
+					continue   # this view's own player is drawn locally
+				_draw_world_car(car, seg, fog_mod, w, h)
 
 		for pu in seg.pickups:
 			if bool(pu.taken):
 				continue
 			var psc: float = seg.p1.screen.scale
 			var px: float = seg.p1.screen.x \
-					+ psc * float(pu.offset) * ROAD_WIDTH * w * 0.5
+					+ psc * float(pu.offset) * ROAD_WIDTH * _ref_w * 0.5
 			var hover: float = 150.0 + sin(Time.get_ticks_msec() * 0.004
 					+ float(seg.index)) * 60.0
 			var py: float = seg.p1.screen.y - hover * psc * h * 0.5
@@ -191,9 +211,25 @@ func _draw_road_and_sprites(w: float, h: float) -> void:
 
 		for spr in seg.sprites:
 			var sc: float = seg.p1.screen.scale
-			var sx: float = seg.p1.screen.x + sc * float(spr.offset) * ROAD_WIDTH * w * 0.5
+			var sx: float = seg.p1.screen.x + sc * float(spr.offset) * ROAD_WIDTH * _ref_w * 0.5
 			var sy: float = seg.p1.screen.y
 			_draw_sprite(spr.name, sc, sx, sy, seg.clip, w, fog_mod)
+
+	if not player_drawn:
+		_draw_player(w, h)
+
+
+## One world car (traffic, rival, or another player's mirror).
+func _draw_world_car(car: Dictionary, seg: Dictionary, fog_mod: Color,
+		w: float, h: float) -> void:
+	var seg_len := TrackBuilder.SEGMENT_LENGTH
+	var percent := fposmod(float(car.z), seg_len) / seg_len
+	var sc := lerpf(seg.p1.screen.scale, seg.p2.screen.scale, percent)
+	var sx: float = lerpf(seg.p1.screen.x, seg.p2.screen.x, percent) \
+			+ sc * float(car.offset) * ROAD_WIDTH * _ref_w * 0.5
+	var sy := lerpf(seg.p1.screen.y, seg.p2.screen.y, percent)
+	var air_px: float = minf(float(car.air) * sc * h * 0.5, h * 0.35)
+	_draw_sprite(car.sprite, sc, sx, sy, seg.clip, w, fog_mod, air_px)
 
 
 ## Fogged grass/road/rumble colors for a segment (specials included).
@@ -298,8 +334,8 @@ func _quad(ax: float, ay: float, bx: float, by: float,
 func _draw_sprite(sprite_name: String, scale_factor: float, x: float, y: float,
 		clip_y: float, w: float, fog_mod: Color, air_px: float = -1.0) -> void:
 	var def: Dictionary = SpriteCatalog.get_def(sprite_name)
-	var dest_w: float = def.world_w * scale_factor * w * 0.5
-	var dest_h: float = def.world_h * scale_factor * w * 0.5
+	var dest_w: float = def.world_w * scale_factor * _ref_w * 0.5
+	var dest_h: float = def.world_h * scale_factor * _ref_w * 0.5
 	if dest_w < 1.5 or dest_h < 1.5:
 		return
 	if air_px >= 0.0:
@@ -336,8 +372,8 @@ func _draw_player(w: float, h: float) -> void:
 	var player: PlayerCar = player
 	var def: Dictionary = SpriteCatalog.get_def("player_%d" % player_index)
 	var sc := 1.0 / cs.height   # projection scale at the player's z
-	var dw: float = def.world_w * sc * w * 0.5
-	var dh: float = def.world_h * sc * w * 0.5
+	var dw: float = def.world_w * sc * _ref_w * 0.5
+	var dh: float = def.world_h * sc * _ref_w * 0.5
 	var cx := w * 0.5
 	# True projection of the car's world altitude against the camera. On
 	# flat ground this lands exactly on the classic 0.92h anchor (the

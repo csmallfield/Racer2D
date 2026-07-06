@@ -27,8 +27,8 @@ const SETTINGS_ROWS: Array = [
 	{"label": "  VIGNETTE", "prop": "crt_vignette", "type": "float", "step": 0.05, "min": 0.0, "max": 0.8},
 	{"label": "  NOISE", "prop": "crt_noise", "type": "float", "step": 0.01, "min": 0.0, "max": 0.25},
 ]
-const PLAYER_ITEMS: Array[String] = ["1 PLAYER", "2 PLAYERS", "4 PLAYERS"]
-const PLAYER_COUNTS: Array[int] = [1, 2, 4]
+const PLAYER_ITEMS: Array[String] = ["1 PLAYER", "2 PLAYERS", "3 PLAYERS", "4 PLAYERS"]
+const PLAYER_COUNTS: Array[int] = [1, 2, 3, 4]
 
 var level_paths: Array = []
 var level_names: Array = []
@@ -71,6 +71,7 @@ var _board_title := ""
 var _view_titles: Array[String] = []
 var _last_beep_second := -1
 var pickups: Array = []
+var _bump_cd: Array[float] = []  # per-player contact-sound cooldown
 
 
 func _ready() -> void:
@@ -142,17 +143,21 @@ func _build_views(count: int) -> void:
 		1: rects = [Rect2(Vector2.ZERO, base)]
 		2: rects = [Rect2(0, 0, base.x, base.y / 2),
 				Rect2(0, base.y / 2, base.x, base.y / 2)]
+		3: rects = [Rect2(0, 0, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
+				Rect2(0, base.y / 2, base.x, base.y / 2)]
 		_: rects = [Rect2(0, 0, base.x / 2, base.y / 2),
 				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
 				Rect2(0, base.y / 2, base.x / 2, base.y / 2),
 				Rect2(base.x / 2, base.y / 2, base.x / 2, base.y / 2)]
-	var dd: int = GameConfig.camera.draw_distance
-	if count == 2:
-		dd = int(dd * 0.66)
-	elif count >= 4:
-		dd = int(dd * 0.45)
 
+	var dd_base: int = GameConfig.camera.draw_distance
 	for i in range(count):
+		# Per-view draw distance by view size: full frame 100%, wide halves
+		# 66%, quadrants 45% (3P mixes both).
+		var dd := dd_base
+		if count > 1:
+			dd = int(dd_base * (0.66 if rects[i].size.x >= base.x else 0.45))
 		var container := SubViewportContainer.new()
 		container.stretch = true
 		container.position = rects[i].position
@@ -232,6 +237,7 @@ func _load_level(idx: int) -> void:
 	finish_order.clear()
 	_prev_air.clear()
 	_prev_boosting.clear()
+	_bump_cd.clear()
 	laps.clear()
 	for i in range(player_count):
 		laps.append(0)
@@ -251,6 +257,7 @@ func _load_level(idx: int) -> void:
 		finish_order.append(-1)
 		_prev_air.append(0.0)
 		_prev_boosting.append(false)
+		_bump_cd.append(0.0)
 		mirrors.append({"z": 0.0, "offset": p.x, "speed": 0.0,
 				"sprite": "player_%d" % i, "y": 0.0, "vy": 0.0, "air": 0.0,
 				"pidx": i})
@@ -442,7 +449,9 @@ func _process(dt: float) -> void:
 			_start_race(_next_in_category(level_index, 1))
 			return
 
-	if state >= State.COUNTDOWN and Input.is_action_just_pressed("ui_cancel"):
+	# Leaving a race is Escape ONLY — ui_cancel also carries gamepad B,
+	# which is boost in-race. B still backs out of menus via ui_cancel.
+	if state >= State.COUNTDOWN and Input.is_action_just_pressed("quit_to_menu"):
 		_enter_menu()
 		return
 
@@ -775,6 +784,7 @@ func _run_frame(dt: float) -> void:
 		_check_player_checkpoint(i, prev_z)
 		_per_player_effects(i, dt)
 		_check_collisions(i)
+		_player_shunts(i, dt)
 		if crossed:
 			laps[i] += 1
 			if laps[i] >= total_laps():
@@ -1117,6 +1127,58 @@ func _car_steer(car: Dictionary, car_seg: Dictionary,
 	if float(car.offset) > 0.9:
 		return -0.1
 	return 0.0
+
+
+## Contact FROM others — the missing half of collisions. Rear shunts: a
+## faster car slamming into your tail throws you forward (and costs them).
+## Side-swipes: near-pace lateral contact shoves both cars apart with a
+## little speed scrub. Works against traffic, rivals, and other players
+## (pushes on a mirror entity route to the real player).
+func _player_shunts(i: int, dt: float) -> void:
+	_bump_cd[i] = maxf(0.0, _bump_cd[i] - dt)
+	var p := players[i]
+	if p.air > 250.0:
+		return
+	var track_len := track.track_length()
+	var pw: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
+	var pz := fposmod(p.position_z + player_z(), track_len)
+	for off in [-1, 0, 1]:
+		var seg := find_segment(pz + float(off) * TrackBuilder.SEGMENT_LENGTH)
+		for car in seg.cars:
+			if int(car.get("pidx", -1)) == i:
+				continue
+			var dz := fposmod(float(car.z) - pz + track_len * 0.5, track_len) \
+					- track_len * 0.5
+			var cw: float = SpriteCatalog.get_def(car.sprite).world_w \
+					/ RoadRenderer.ROAD_WIDTH
+			if not _overlap(p.x, pw, float(car.offset), cw, 0.9):
+				continue
+			if dz < -60.0 and dz > -600.0 and float(car.speed) > p.speed * 1.02:
+				# Rear shunt: they hit you.
+				p.speed += (float(car.speed) - p.speed) * 0.6
+				car.speed = float(car.speed) * 0.8
+				p.bounce = 6.0
+				if _bump_cd[i] <= 0.0:
+					Audio.play("bump", -2.0)
+					_bump_cd[i] = 0.4
+			elif absf(dz) <= 260.0 and absf(float(car.speed) - p.speed) \
+					< GameConfig.player.max_speed * 0.15:
+				# Side-swipe: push apart, both scrub.
+				var dir := signf(p.x - float(car.offset))
+				if dir == 0.0:
+					dir = 1.0
+				p.x += dir * 1.2 * dt
+				p.speed *= 1.0 - 0.25 * dt
+				var pj := int(car.get("pidx", -1))
+				if pj >= 0:
+					players[pj].x -= dir * 1.2 * dt
+					players[pj].speed *= 1.0 - 0.25 * dt
+				else:
+					car.offset = clampf(float(car.offset) - dir * 1.2 * dt, -1.2, 1.2)
+					car.speed = float(car.speed) * (1.0 - 0.25 * dt)
+				if _bump_cd[i] <= 0.0:
+					Audio.play("bump", -6.0, 1.0, 0.25)
+					_bump_cd[i] = 0.35
 
 
 func _check_collisions(i: int) -> void:
