@@ -38,6 +38,7 @@ var laps: Array[int] = []       # per player: completed laps this race
 var level_index := 0
 var level: TrackLevel
 var track: TrackBuilder
+var palette_timeline: PaletteTimeline   # resolved theme over track position
 var cars: Array = []
 var rivals: RivalManager
 
@@ -221,6 +222,8 @@ func _load_level(idx: int) -> void:
 	track = TrackBuilder.new()
 	level.build(track)
 	track.finalize()
+	# Built after finalize() so build() can author keyframes by segment count.
+	palette_timeline = PaletteTimeline.build(level.theme, level.palette_keyframes)
 
 	cp_zs = track.mark_checkpoints(level.checkpoint_count)
 	_init_pickups()

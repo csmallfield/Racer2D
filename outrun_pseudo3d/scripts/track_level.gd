@@ -41,6 +41,31 @@ var theme := {
 }
 
 
+## Optional palette keyframes: blend from the base theme to new colours at
+## chosen points along the track (day -> sunset, dry -> lush). Each entry:
+##   "to"    : Dictionary  - PARTIAL theme; only the keys that change
+##   "start" : int         - segment index where the blend begins
+##   "over"  : int         - blend length in segments
+##   "ease"  : String      - "in_out" (default), "in", "out", "linear"
+## Keep them sorted by start and non-overlapping. Segment indices are into the
+## track: on circuits they cycle every lap, on tours they run once. See
+## PaletteTimeline. Leave empty for a single static palette (the default).
+var palette_keyframes: Array = []
+
+## Optional sprite parallax background: an ordered stack of layers, drawn
+## far-to-near behind the road. Leave empty to keep the procedural hills.
+## Each layer entry:
+##   "sprite"      : String - key into BackgroundCatalog (e.g. "mountains_far")
+##   "parallax"    : float  - horizontal scroll factor vs the curve (0..1)
+##   "y"           : float  - baseline as a fraction of screen height (0.5 = horizon)
+##   "scale"       : float  - vertical size multiplier (default 1.0)
+##   "tint_key"    : String - theme key to colour the layer with (optional)
+##   "fog"         : float  - 0..1 blend toward theme.fog for depth (default 0)
+##   "alt_parallax": float  - vertical shift per altitude unit on crests
+##                            (optional, default 0; needs tuning per track)
+var background: Array = []
+
+
 ## Override this. Describe the road using the TrackBuilder API.
 func build(b: TrackBuilder) -> void:
 	b.add_straight()

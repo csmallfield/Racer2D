@@ -5,7 +5,7 @@ extends TrackLevel
 
 func _init() -> void:
 	level_name = "CIRCUIT 3 — SUGAR RING"
-	time_limit = 85.0          # per lap
+	time_limit = 80.0          # per lap
 	laps = 3
 	checkpoint_count = 2
 	traffic_count = 18

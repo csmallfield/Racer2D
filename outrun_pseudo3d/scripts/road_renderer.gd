@@ -60,26 +60,86 @@ func _draw() -> void:
 		return
 	var vp := get_viewport_rect().size
 	_ref_w = minf(vp.x, vp.y * 16.0 / 9.0)
-	_draw_background(vp.x, vp.y)
-	_draw_road_and_sprites(vp.x, vp.y)
+	# Resolve the palette once per frame so the background and the road agree.
+	var th := _resolve_theme()
+	_draw_background(vp.x, vp.y, th)
+	_draw_road_and_sprites(vp.x, vp.y, th)
+
+
+## The active theme this frame. If the level has palette keyframes, blend them
+## against THIS view's player position (so a leading car can be in sunset while
+## a trailing car is still in daylight). Falls back to the static level theme.
+## For race-long progression on a circuit, replace player.position_z here with
+## the player's total distance (laps * track_length + position_z) before the
+## segment lookup.
+func _resolve_theme() -> Dictionary:
+	var tl: PaletteTimeline = main.palette_timeline
+	if tl == null or not tl.has_keyframes():
+		return main.level.theme
+	return tl.resolve(main.find_segment(player.position_z).index)
 
 
 # === BACKGROUND ===
 
-func _draw_background(w: float, h: float) -> void:
-	var th: Dictionary = main.level.theme
+func _draw_background(w: float, h: float, th: Dictionary) -> void:
 	var horizon := h * 0.5
 	# Sky gradient.
 	var pts := PackedVector2Array([
 		Vector2(0, 0), Vector2(w, 0), Vector2(w, horizon), Vector2(0, horizon)])
 	var cols := PackedColorArray([th.sky_top, th.sky_top, th.sky_bottom, th.sky_bottom])
 	draw_polygon(pts, cols)
-	# Sun.
+	# Sun (behind any parallax layers, so ridgelines occlude it).
 	draw_circle(Vector2(w * 0.72, h * 0.18), h * 0.08, th.sun)
 	# Distant ground fill below the horizon. This also hides the gap that
 	# opens up between the road top and the horizon on downhills (Lotus trick).
 	draw_rect(Rect2(0, horizon, w, h - horizon), th.grass_dark.lerp(th.fog, 0.85))
-	# Rolling hill silhouette, drawn as columns (parallax-scrolls with curves).
+
+	# Sprite parallax layers if the level defines them; otherwise the classic
+	# procedural hill silhouette.
+	var layers: Array = main.level.background
+	if layers.is_empty():
+		_draw_procedural_hills(w, h, horizon, th)
+	else:
+		for layer in layers:
+			_draw_parallax_layer(layer, w, h, th)
+
+
+## One tileable background layer, scrolled horizontally by the accumulated
+## curve offset (near layers move more) and tinted from the palette so a
+## sunset keyframe recolours the whole skyline for free.
+func _draw_parallax_layer(layer: Dictionary, w: float, h: float,
+		th: Dictionary) -> void:
+	var def: Dictionary = BackgroundCatalog.get_layer_def(String(layer.sprite))
+	var tex: Texture2D = def.texture
+	var vscale := (h / 720.0) * float(layer.get("scale", 1.0))
+	var dw := float(tex.get_width()) * vscale
+	var dh := float(def.native_h) * vscale
+	if dw < 1.0:
+		return
+
+	# Baseline (texture bottom edge). Optional altitude parallax nudges it on
+	# crests — default 0 (needs per-track tuning to feel right).
+	var base_y := h * float(layer.get("y", 0.5))
+	base_y += last_cam_y * float(layer.get("alt_parallax", 0.0))
+	var dest_y := base_y - dh
+
+	# Colour: white standin tinted by a theme key, then fogged for depth.
+	var col := Color.WHITE
+	if layer.has("tint_key") and th.has(layer.tint_key):
+		col = th[layer.tint_key]
+	col = col.lerp(th.fog, float(layer.get("fog", 0.0)))
+
+	# Tile across the viewport, wrapped by the parallax scroll.
+	var scroll := hill_offset * float(layer.get("parallax", 0.2))
+	var x := -fposmod(scroll, dw)
+	while x < w:
+		draw_texture_rect(tex, Rect2(x, dest_y, dw, dh), false, col)
+		x += dw
+
+
+## Legacy procedural hills — the fallback when a level defines no layers.
+func _draw_procedural_hills(w: float, h: float, horizon: float,
+		th: Dictionary) -> void:
 	var hill_col: Color = th.hills.lerp(th.fog, 0.5)
 	var step := 16.0
 	var x := 0.0
@@ -109,14 +169,13 @@ func _fog_amount(n: int) -> float:
 	return 1.0 - 1.0 / exp(d * d * cs.fog_density)
 
 
-func _draw_road_and_sprites(w: float, h: float) -> void:
+func _draw_road_and_sprites(w: float, h: float, th: Dictionary) -> void:
 	var track: TrackBuilder = main.track
 	var segments: Array = track.segments
 	var seg_count := segments.size()
 	var seg_len: float = TrackBuilder.SEGMENT_LENGTH
 	var track_len: float = track.track_length()
 	var player: PlayerCar = player
-	var th: Dictionary = main.level.theme
 
 	var base: Dictionary = main.find_segment(player.position_z)
 	var base_percent := fposmod(player.position_z, seg_len) / seg_len
