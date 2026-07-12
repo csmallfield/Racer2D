@@ -44,7 +44,7 @@ extends Resource
 
 @export_group("Pickups")
 @export var pickup_boost_amount := 1.5  # seconds of boost per canister
-@export var pickup_respawn := 25.0      # seconds until a taken canister returns
+@export var pickup_respawn := 5.0      # seconds until a taken canister returns
 ## Random canisters scattered when a level defines none of its own.
 @export var auto_pickup_count := 4
 

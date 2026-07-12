@@ -8,6 +8,7 @@ func _init() -> void:
 	level_name = "STAGE 4 — NEON CITY"
 	time_limit = 100.0
 	traffic_count = 120
+	checkpoint_count = 3   # short track: fewer, longer sections (avoids constant countdown)
 	music = "music_city"
 	theme = {
 		"sky_top": Color(0.1, 0.02, 0.18),

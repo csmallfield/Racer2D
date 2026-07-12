@@ -30,9 +30,9 @@ var last_cam_y := 0.0            # camera altitude this frame (projects the play
 var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
 var _shake_t := 0.0              # boost-ignition camera shake remaining
 var _ref_w := 1920.0             # aspect-locked width (16:9 of height): ALL
-                                 # world scaling uses this, so wide viewports
-                                 # (2P split) keep the 1P composition and the
-                                 # extra width becomes pure peripheral view.
+								 # world scaling uses this, so wide viewports
+								 # (2P split) keep the 1P composition and the
+								 # extra width becomes pure peripheral view.
 
 
 ## Distance from camera to the player car along z.
@@ -221,7 +221,7 @@ func _draw_road_and_sprites(w: float, h: float, th: Dictionary) -> void:
 		if not apron_drawn:
 			_draw_apron(seg, w, h, _fog_amount(n), th)
 			apron_drawn = true
-		_draw_segment(seg, w, _fog_amount(n), th)
+		_draw_segment(seg, w, h, _fog_amount(n), th)
 		maxy = seg.p2.screen.y
 
 	# --- Pass 2: sprites and cars, back to front (painter's algorithm).
@@ -306,6 +306,12 @@ func _road_colors(seg: Dictionary, fog: float, th: Dictionary) -> Dictionary:
 	elif seg.special == "checkpoint":
 		road = th.checkpoint if th.has("checkpoint") else th.start
 		rumble = th.checkpoint if th.has("checkpoint") else th.start
+	# Tunnel interior: sink the surface toward the dark as the mouth fades in.
+	if seg.get("tunnel", false) and seg.tunnel_shade > 0.0:
+		var sh: float = seg.tunnel_shade
+		grass = grass.lerp(th.get("tunnel_floor", Color(0.07, 0.07, 0.09)), sh)
+		road = road.lerp(th.get("tunnel_road", Color(0.14, 0.14, 0.17)), sh)
+		rumble = rumble.lerp(th.get("tunnel_rumble", Color(0.32, 0.10, 0.10)), sh)
 	var fogc: Color = th.fog
 	return {
 		"grass": grass.lerp(fogc, fog),
@@ -330,7 +336,8 @@ func _draw_apron(seg: Dictionary, w: float, h: float, fog: float,
 			c.road, c.rumble, false, c.road)
 
 
-func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> void:
+func _draw_segment(seg: Dictionary, w: float, h: float, fog: float,
+		th: Dictionary) -> void:
 	var c := _road_colors(seg, fog, th)
 	var grass: Color = c.grass
 	var road: Color = c.road
@@ -343,12 +350,47 @@ func _draw_segment(seg: Dictionary, w: float, fog: float, th: Dictionary) -> voi
 	var y2: float = seg.p2.screen.y
 	var w2: float = seg.p2.screen.w
 
-	# Grass strip for this slice.
+	# Grass strip for this slice. (Inside a tunnel _road_colors has already
+	# turned this into the dark floor/wall base, and it sits BELOW the slice's
+	# far edge, so it never covers the bright exit further down the bore.)
 	draw_rect(Rect2(0, y2, w, y1 - y2), grass)
+
+	# Ceiling + walls, drawn before the ribbon so the road edge stays crisp.
+	if seg.get("tunnel", false):
+		_draw_tunnel(seg, h, fog, th, x1, y1, w1, x2, y2, w2)
 
 	var draw_lanes: bool = seg.color == 0 and seg.special == ""
 	var lane_col: Color = th.lane.lerp(th.fog, fog)
 	_draw_ribbon(x1, y1, w1, x2, y2, w2, road, rumble, draw_lanes, lane_col)
+
+
+## Roof and walls for one tunnel slice. The ceiling is the road quad mirrored
+## up by the projected ceiling height; the walls join the road edges to the
+## ceiling edges. Everything converges to the vanishing point exactly like the
+## road, so nearer slices frame the bright opening at the far end for free.
+func _draw_tunnel(seg: Dictionary, h: float, fog: float, th: Dictionary,
+		x1: float, y1: float, w1: float,
+		x2: float, y2: float, w2: float) -> void:
+	var hgt: float = seg.tunnel_h
+	var sh: float = seg.tunnel_shade
+	# World height -> screen rise uses the same factor as elevation projection.
+	var cd1: float = seg.p1.screen.scale * hgt * h * 0.5
+	var cd2: float = seg.p2.screen.scale * hgt * h * 0.5
+
+	# Fade from the exterior fog at the mouth (sh=0) to the dark interior
+	# (sh=1), then apply distance fog on top.
+	var wall: Color = th.get("tunnel_wall", Color(0.11, 0.11, 0.14))
+	var ceil: Color = th.get("tunnel_ceiling", Color(0.06, 0.06, 0.08))
+	wall = th.fog.lerp(wall, sh).lerp(th.fog, fog)
+	ceil = th.fog.lerp(ceil, sh).lerp(th.fog, fog)
+
+	# Ceiling (near-left, near-right, far-right, far-left).
+	_quad(x1 - w1, y1 - cd1, x1 + w1, y1 - cd1,
+			x2 + w2, y2 - cd2, x2 - w2, y2 - cd2, ceil)
+	# Left wall (road edge up to ceiling edge).
+	_quad(x1 - w1, y1, x2 - w2, y2, x2 - w2, y2 - cd2, x1 - w1, y1 - cd1, wall)
+	# Right wall.
+	_quad(x1 + w1, y1, x2 + w2, y2, x2 + w2, y2 - cd2, x1 + w1, y1 - cd1, wall)
 
 
 ## One road ribbon: rumble strips, surface, lane lines.

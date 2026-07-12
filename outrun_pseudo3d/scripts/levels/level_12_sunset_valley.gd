@@ -14,6 +14,7 @@ func _init() -> void:
 	level_name = "STAGE 12 — SUNSET VALLEY"
 	time_limit = 110.0
 	traffic_count = 80
+	checkpoint_count = 3   # short track: fewer, longer sections (avoids constant countdown)
 	music = "music_jungle"
 
 	# Base palette: dry, dusty, high midday sun.

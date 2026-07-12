@@ -11,7 +11,7 @@ uniform float scanline_density : hint_range(100.0, 1080.0) = 540.0;
 uniform float aberration : hint_range(0.0, 6.0) = 1.4;       // color fringe, pixels
 uniform float vignette : hint_range(0.0, 1.0) = 0.25;
 uniform float noise_strength : hint_range(0.0, 0.3) = 0.05;  // animated VHS grain
-uniform float flicker : hint_range(0.0, 0.2) = 0.02;         // luminance wobble
+uniform float flicker : hint_range(0.0, 0.1) = 0.01;         // luminance wobble
 
 
 vec2 curve(vec2 uv, float amt) {

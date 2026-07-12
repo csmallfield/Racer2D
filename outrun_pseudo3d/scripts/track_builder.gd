@@ -74,6 +74,9 @@ func _add_segment(curve: float, y: float) -> void:
 		"color": int(i / float(RUMBLE_LENGTH)) % 2,   # alternate light/dark stripes
 		"special": "",
 		"pickups": [],
+		"tunnel": false,      # roofed with ceiling + walls, dark interior
+		"tunnel_h": 0.0,      # ceiling height above the road, world units
+		"tunnel_shade": 0.0,  # 0 at a mouth (open) -> 1 deep inside (dark)
 	})
 
 
@@ -131,6 +134,41 @@ func add_s_curves() -> void:
 ## Curves gently back down to altitude zero so the loop point doesn't pop.
 func add_downhill_to_end(n: int = 200) -> void:
 	add_road(n, n, n, -ROAD.CURVE.EASY, -last_y() / SEGMENT_LENGTH)
+
+
+# === TUNNELS ===
+
+## Flag an existing range of segments [from_index, to_index) as a tunnel. The
+## renderer roofs them with a ceiling and two walls and darkens the interior.
+## This is a pure attribute pass over already-built road, so tunnels compose
+## with whatever shape is underneath — they can bend and climb.
+##   ceiling_height : world units above the road surface (tune to taste)
+##   mouth          : segments over which the lighting fades in at each end,
+##                    so entering/exiting isn't a hard wall of black (0 = cut)
+func mark_tunnel(from_index: int, to_index: int,
+		ceiling_height: float = 5000.0, mouth: int = 8) -> void:
+	var a := clampi(from_index, 0, segments.size())
+	var b := clampi(to_index, 0, segments.size())
+	if b - a <= 0:
+		return
+	var m := float(maxi(1, mini(mouth, (b - a) / 2)))
+	for i in range(a, b):
+		var seg: Dictionary = segments[i]
+		seg.tunnel = true
+		seg.tunnel_h = ceiling_height
+		# Distance from the nearer mouth, normalised over the fade length.
+		var edge := float(mini(i - a, b - 1 - i))
+		seg.tunnel_shade = clampf(edge / m, 0.0, 1.0)
+
+
+## Convenience: lay a tunnelled stretch in one call, eased like add_road.
+## `length` is the total segment count (split into enter/hold/leave thirds).
+func add_tunnel(length: int, ceiling_height: float = 5000.0, mouth: int = 8,
+		curve: float = 0.0, y: float = 0.0) -> void:
+	var start := segments.size()
+	var third := maxi(1, length / 3)
+	add_road(third, third, third, curve, y)
+	mark_tunnel(start, segments.size(), ceiling_height, mouth)
 
 
 # === SCENERY & SPRITES ===
