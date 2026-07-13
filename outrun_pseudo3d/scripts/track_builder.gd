@@ -146,7 +146,7 @@ func add_downhill_to_end(n: int = 200) -> void:
 ##   mouth          : segments over which the lighting fades in at each end,
 ##                    so entering/exiting isn't a hard wall of black (0 = cut)
 func mark_tunnel(from_index: int, to_index: int,
-		ceiling_height: float = 5000.0, mouth: int = 8) -> void:
+		ceiling_height: float = 1600.0, mouth: int = 8) -> void:
 	var a := clampi(from_index, 0, segments.size())
 	var b := clampi(to_index, 0, segments.size())
 	if b - a <= 0:
@@ -163,7 +163,7 @@ func mark_tunnel(from_index: int, to_index: int,
 
 ## Convenience: lay a tunnelled stretch in one call, eased like add_road.
 ## `length` is the total segment count (split into enter/hold/leave thirds).
-func add_tunnel(length: int, ceiling_height: float = 5000.0, mouth: int = 8,
+func add_tunnel(length: int, ceiling_height: float = 1600.0, mouth: int = 8,
 		curve: float = 0.0, y: float = 0.0) -> void:
 	var start := segments.size()
 	var third := maxi(1, length / 3)

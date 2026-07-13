@@ -201,6 +201,11 @@ func _draw_road_and_sprites(w: float, h: float, th: Dictionary) -> void:
 	# keeps its shape while scrolling (codeincomplete's dx trick).
 	var dx: float = -(base.curve * base_percent)
 	var apron_drawn := false
+	# Visible tunnel slices, collected near->far here, drawn far->near in a
+	# dedicated pass AFTER the road so the enclosure paints over any exterior
+	# grass that bleeds in near the exit (kills the flashing mouth) and nearer
+	# slices correctly overlap farther ones.
+	var tunnel_slices: Array = []
 
 	for n in range(draw_distance):
 		var seg: Dictionary = segments[(base.index + n) % seg_count]
@@ -222,7 +227,18 @@ func _draw_road_and_sprites(w: float, h: float, th: Dictionary) -> void:
 			_draw_apron(seg, w, h, _fog_amount(n), th)
 			apron_drawn = true
 		_draw_segment(seg, w, h, _fog_amount(n), th)
+		if seg.get("tunnel", false):
+			tunnel_slices.append({"seg": seg, "fog": _fog_amount(n)})
 		maxy = seg.p2.screen.y
+
+	# --- Pass 1b: tunnel enclosure (ceiling + walls), far->near, on top of
+	# the road pass so exterior grass can't overpaint the bore. ---
+	for i in range(tunnel_slices.size() - 1, -1, -1):
+		var ts: Dictionary = tunnel_slices[i]
+		var tseg: Dictionary = ts.seg
+		_draw_tunnel(tseg, h, ts.fog, th,
+				tseg.p1.screen.x, tseg.p1.screen.y, tseg.p1.screen.w,
+				tseg.p2.screen.x, tseg.p2.screen.y, tseg.p2.screen.w)
 
 	# --- Pass 2: sprites and cars, back to front (painter's algorithm).
 	# The local player is interleaved at his TRUE depth (player_z() ahead
@@ -268,6 +284,8 @@ func _draw_road_and_sprites(w: float, h: float, th: Dictionary) -> void:
 			var py: float = seg.p1.screen.y - hover * psc * h * 0.5
 			_draw_sprite("boost_pickup", psc, px, py, seg.clip, w, fog_mod)
 
+		if seg.get("tunnel", false):
+			continue   # no roadside billboards inside the bore
 		for spr in seg.sprites:
 			var sc: float = seg.p1.screen.scale
 			var sx: float = seg.p1.screen.x + sc * float(spr.offset) * ROAD_WIDTH * _ref_w * 0.5
@@ -351,13 +369,10 @@ func _draw_segment(seg: Dictionary, w: float, h: float, fog: float,
 	var w2: float = seg.p2.screen.w
 
 	# Grass strip for this slice. (Inside a tunnel _road_colors has already
-	# turned this into the dark floor/wall base, and it sits BELOW the slice's
-	# far edge, so it never covers the bright exit further down the bore.)
+	# turned this into the dark floor, and it sits BELOW the slice's far edge,
+	# so it never covers the bright exit further down the bore.) The ceiling
+	# and walls are drawn later in Pass 1b, on top of exterior geometry.
 	draw_rect(Rect2(0, y2, w, y1 - y2), grass)
-
-	# Ceiling + walls, drawn before the ribbon so the road edge stays crisp.
-	if seg.get("tunnel", false):
-		_draw_tunnel(seg, h, fog, th, x1, y1, w1, x2, y2, w2)
 
 	var draw_lanes: bool = seg.color == 0 and seg.special == ""
 	var lane_col: Color = th.lane.lerp(th.fog, fog)

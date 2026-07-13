@@ -40,7 +40,7 @@ func build(b: TrackBuilder) -> void:
 	# underneath — here a LONG uphill, proving the ceiling tracks elevation.
 	var tun_start := b.segments.size()
 	b.add_hill(R.LENGTH.LONG, 120)
-	b.mark_tunnel(tun_start, b.segments.size())   # default ceiling + soft mouths
+	#b.mark_tunnel(tun_start, b.segments.size(), 2500.0)   # tight bore, soft mouths
 	b.add_hill(R.LENGTH.SHORT, -60)
 	b.add_curve(R.LENGTH.MEDIUM, R.CURVE.HARD, -40)
 	b.add_straight(R.LENGTH.SHORT)
