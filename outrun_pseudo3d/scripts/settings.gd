@@ -10,6 +10,11 @@ const SHADER := "res://assets/shaders/retro_screen.gdshader"
 var fullscreen := false
 var music_volume := 1.0        # 0..1 linear
 var sfx_volume := 1.0
+# Menu selections made sticky across sessions (set from the menu flow, not the
+# settings screen). difficulty: 0 Easy / 1 Normal / 2 Hard. sticky_racers holds
+# the last-used racer id per player slot.
+var difficulty := 1
+var sticky_racers: Array = []
 # Seeded from resources/retro_filter.tres (designer defaults); the menu
 # subset is then overridden by the user save. Flicker and scanline density
 # are resource-only.
@@ -76,6 +81,7 @@ func save() -> void:
 		"crt": crt_enabled, "curvature": crt_curvature,
 		"scanlines": crt_scanlines, "fringe": crt_fringe,
 		"vignette": crt_vignette, "noise": crt_noise,
+		"difficulty": difficulty, "racers": sticky_racers,
 	}))
 
 
@@ -97,3 +103,6 @@ func _load() -> void:
 	crt_fringe = float(d.get("fringe", crt_fringe))
 	crt_vignette = float(d.get("vignette", crt_vignette))
 	crt_noise = float(d.get("noise", crt_noise))
+	difficulty = int(d.get("difficulty", difficulty))
+	var r: Variant = d.get("racers", sticky_racers)
+	sticky_racers = r if r is Array else sticky_racers

@@ -72,6 +72,23 @@ func show_list(title: String, items: Array[String], sel: int) -> void:
 	_content.text = rows
 
 
+## Wizard screen: an optional gray subtitle block above a selectable list.
+## Used for the Confirm summary, Credits, and the Racer Select placeholder.
+func show_config(title: String, subtitle: Array, items: Array[String], sel: int) -> void:
+	visible = true
+	_title_label.text = title
+	var gap := _fit_list(items.size() + subtitle.size() + 1, false)
+	var rows := "\n[center]"
+	for line in subtitle:
+		rows += "[color=#aaaaaa]%s[/color]%s" % [String(line), gap]
+	if not subtitle.is_empty():
+		rows += gap
+	for i in range(items.size()):
+		rows += _row(items[i], i == sel) + gap
+	rows += "[color=#888888]Enter / A select  •  Esc / B back[/color][/center]"
+	_content.text = rows
+
+
 ## Stage picker: left/right cycles, shown with the chosen mode as context.
 func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 	visible = true

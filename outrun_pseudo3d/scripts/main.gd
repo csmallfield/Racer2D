@@ -10,10 +10,14 @@ const AI_LOOKAHEAD := 20        # segments traffic scans ahead for avoidance
 const MP_FINISH_GRACE := 20.0   # after the first finish, others get this long
 const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 
-enum State { MENU, PLAYER_SELECT, LEVEL_SELECT, LEADERBOARD, SETTINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+## MENU now covers the whole front end (the MenuFlow wizard renders every
+## pre-race screen); LEADERBOARD and SETTINGS remain distinct leaf screens.
+## All menu-family states stay below COUNTDOWN so the `state >= COUNTDOWN`
+## in-race guards elsewhere keep working.
+enum State { MENU, LEADERBOARD, SETTINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+## In-sim race kind. The higher-level menu branch (tournament vs quick race)
+## lives in `play_mode`; the sim only needs to know circuit / tour / time trial.
 enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
-
-const MENU_ITEMS: Array[String] = ["TOUR", "CIRCUIT", "TIME TRIAL", "BEST TIMES", "SETTINGS", "QUIT"]
 
 ## Settings rows: {label, property (on the Settings autoload), type, step, min, max}
 const SETTINGS_ROWS: Array = [
@@ -27,9 +31,6 @@ const SETTINGS_ROWS: Array = [
 	{"label": "  VIGNETTE", "prop": "crt_vignette", "type": "float", "step": 0.05, "min": 0.0, "max": 0.8},
 	{"label": "  NOISE", "prop": "crt_noise", "type": "float", "step": 0.01, "min": 0.0, "max": 0.25},
 ]
-const PLAYER_ITEMS: Array[String] = ["1 PLAYER", "2 PLAYERS", "3 PLAYERS", "4 PLAYERS"]
-const PLAYER_COUNTS: Array[int] = [1, 2, 3, 4]
-
 var level_paths: Array = []
 var level_names: Array = []
 var level_musics: Array = []
@@ -59,6 +60,16 @@ var _finish_deadline := -1.0
 var state: State = State.MENU
 var mode: Mode = Mode.TOUR
 var menu: MenuLayer
+var menu_flow: MenuFlow
+## Selections gathered by the menu flow. Phase 1 plumbing: play_mode/difficulty/
+## selected_racers/current_cup are stored and made sticky but not yet read by
+## the sim — they wire into gameplay, records, and tournaments in later phases.
+## lap_override IS live (feeds total_laps) so Quick Race lap counts work now.
+var play_mode := "QUICK_RACE"   # TOURNAMENT / QUICK_RACE / TIME_TRIAL
+var difficulty := 1             # 0 Easy, 1 Normal, 2 Hard
+var selected_racers: Array = [] # racer id per player slot
+var lap_override := 0           # >0 overrides level.laps (Quick Race circuits)
+var current_cup := ""           # tournament cup id (series logic is a later phase)
 var menu_sel := 0
 var select_sel := 0
 var paused_from: State = State.RUNNING
@@ -81,6 +92,7 @@ func _ready() -> void:
 	menu = MenuLayer.new()
 	_build_views(1)
 	add_child(menu)   # menu draws over every viewport
+	menu_flow = MenuFlow.new(self, menu)
 	_load_level(0)    # idle stage 1 as the menu backdrop
 	_enter_menu()
 
@@ -105,7 +117,7 @@ func _effective_progress(i: int) -> float:
 
 
 func total_laps() -> int:
-	return maxi(level.laps, 1)
+	return lap_override if lap_override > 0 else maxi(level.laps, 1)
 
 
 func race_length() -> float:
@@ -332,7 +344,7 @@ func _enter_menu() -> void:
 		v.hud.clear_race_ui()
 	Audio.stop_engine()
 	Audio.play_music("music_menu")
-	menu.show_main(MENU_ITEMS, menu_sel)
+	menu_flow.reset()
 
 
 # === SHARED HELPERS (unchanged logic) ===
@@ -474,11 +486,7 @@ func _process(dt: float) -> void:
 
 	match state:
 		State.MENU:
-			_menu_frame(dt)
-		State.PLAYER_SELECT:
-			_player_select_frame(dt)
-		State.LEVEL_SELECT:
-			_level_select_frame(dt)
+			menu_flow.frame(dt)
 		State.LEADERBOARD:
 			_leaderboard_frame(dt)
 		State.SETTINGS:
@@ -521,75 +529,58 @@ func _any_accel() -> bool:
 	return false
 
 
-## Title menu: traffic ambles through the idle backdrop while the player
-## picks a mode. Navigation: steer/ui up-down, accelerate/ui_accept selects.
-func _menu_frame(dt: float) -> void:
-	_update_traffic(dt)
-	# ui_* actions only: "accelerate" contains the Up arrow and "brake" the
-	# Down arrow, so they would fire alongside ui_up/ui_down navigation.
-	# Enter / Space / gamepad A confirm via ui_accept.
-	var moved := 0
-	if Input.is_action_just_pressed("ui_down"):
-		moved = 1
-	elif Input.is_action_just_pressed("ui_up"):
-		moved = -1
-	if moved != 0:
-		menu_sel = wrapi(menu_sel + moved, 0, MENU_ITEMS.size())
-		Audio.play("menu_move")
-		menu.show_main(MENU_ITEMS, menu_sel)
-	if Input.is_action_just_pressed("ui_accept"):
-		Audio.play("menu_select")
-		match menu_sel:
-			0:
-				mode = Mode.TOUR
-				_open_player_select()
-			1:
-				mode = Mode.CIRCUIT
-				_open_player_select()
-			2:
-				mode = Mode.TIME_TRIAL
-				_open_player_select()
-			3:
-				state = State.LEADERBOARD
-				select_sel = 0
-				_refresh_board()
-			4:
-				state = State.SETTINGS
-				menu_sel = 0
-				_show_settings()
-			5:
-				get_tree().quit()
+## Terminal actions the MenuFlow calls once selections are made. The flow
+## owns navigation and rendering; main owns state transitions and the race.
+
+func open_board() -> void:
+	state = State.LEADERBOARD
+	select_sel = 0
+	_refresh_board()
 
 
-func _open_player_select() -> void:
-	state = State.PLAYER_SELECT
-	menu_sel = PLAYER_COUNTS.find(player_count)
-	if menu_sel < 0:
-		menu_sel = 0
-	menu.show_list("%s — PLAYERS" % _mode_name(), PLAYER_ITEMS, menu_sel)
+func open_settings() -> void:
+	state = State.SETTINGS
+	menu_sel = 0
+	_show_settings()
 
 
-func _player_select_frame(dt: float) -> void:
-	_update_traffic(dt)
-	var moved := 0
-	if Input.is_action_just_pressed("ui_down"):
-		moved = 1
-	elif Input.is_action_just_pressed("ui_up"):
-		moved = -1
-	if moved != 0:
-		menu_sel = wrapi(menu_sel + moved, 0, PLAYER_ITEMS.size())
-		Audio.play("menu_move")
-		menu.show_list("%s — PLAYERS" % _mode_name(), PLAYER_ITEMS, menu_sel)
-	if Input.is_action_just_pressed("ui_accept"):
-		Audio.play("menu_select")
-		var count: int = PLAYER_COUNTS[menu_sel]
-		if count != player_count:
-			_build_views(count)
-			_load_level(level_index)   # rebuild the backdrop for the new views
-		_open_level_select()
-	elif Input.is_action_just_pressed("ui_cancel"):
-		Audio.play("menu_move")
-		_enter_menu()
+func quit_game() -> void:
+	get_tree().quit()
+
+
+## Last-used racer for a player slot. Phase 1 defaults to the slot livery;
+## the Racer Select grid (Phase 2) will write real picks into Settings.
+func sticky_racer(slot: int) -> int:
+	if slot < Settings.sticky_racers.size():
+		return int(Settings.sticky_racers[slot])
+	return slot
+
+
+## Launch a fully-configured race. race_kind is the in-sim Mode
+## ("TOUR" / "CIRCUIT" / "TIME_TRIAL"); p_mode is the menu branch kept for
+## later phases (tournament series, difficulty-filtered records, etc.).
+func start_configured(p_mode: String, race_kind: String, count: int,
+		diff: int, racers: Array, laps: int, idx: int, cup: String) -> void:
+	play_mode = p_mode
+	match race_kind:
+		"CIRCUIT":
+			mode = Mode.CIRCUIT
+		"TIME_TRIAL":
+			mode = Mode.TIME_TRIAL
+		_:
+			mode = Mode.TOUR
+	difficulty = diff
+	selected_racers = racers.duplicate()
+	lap_override = laps
+	current_cup = cup
+	# Persist sticky prefs (Time Trial has no difficulty, so leave it be).
+	if p_mode != "TIME_TRIAL":
+		Settings.difficulty = diff
+	Settings.sticky_racers = racers.duplicate()
+	Settings.save()
+	if count != player_count:
+		_build_views(count)
+	_start_race(idx)
 
 
 ## Settings screen: up/down select, left/right adjust (applied live),
@@ -652,37 +643,14 @@ func _show_settings() -> void:
 	menu.show_list("SETTINGS", rows, menu_sel)
 
 
-func _mode_name() -> String:
-	match mode:
-		Mode.CIRCUIT:
-			return "CIRCUIT"
-		Mode.TIME_TRIAL:
-			return "TIME TRIAL"
-		_:
-			return "TOUR"
-
-
-func _open_level_select() -> void:
-	state = State.LEVEL_SELECT
-	var cat := _category_indices()
-	select_sel = maxi(cat.find(level_index), 0)
-	menu.show_levels(_category_names(), select_sel, _mode_name())
-
-
-## Levels belonging to the current mode: circuits for CIRCUIT, tours otherwise.
+## Levels belonging to the current in-race mode: circuits for CIRCUIT, tours
+## otherwise. Used by post-race "next level" advancement (R / N in-race).
 func _category_indices() -> Array[int]:
 	var out: Array[int] = []
 	for i in range(level_paths.size()):
 		var is_circuit: bool = int(level_laps[i]) > 0
 		if (mode == Mode.CIRCUIT) == is_circuit:
 			out.append(i)
-	return out
-
-
-func _category_names() -> Array:
-	var out: Array = []
-	for i in _category_indices():
-		out.append(level_names[i])
 	return out
 
 
@@ -693,29 +661,6 @@ func _next_in_category(global_idx: int, step: int) -> int:
 		return global_idx
 	var pos := maxi(cat.find(global_idx), 0)
 	return cat[wrapi(pos + step, 0, cat.size())]
-
-
-
-
-func _level_select_frame(dt: float) -> void:
-	_update_traffic(dt)
-	var moved := 0
-	if (Input.is_action_just_pressed("ui_down")
-			or Input.is_action_just_pressed("p0_steer_right")):
-		moved = 1
-	elif (Input.is_action_just_pressed("ui_up")
-			or Input.is_action_just_pressed("p0_steer_left")):
-		moved = -1
-	if moved != 0:
-		select_sel = wrapi(select_sel + moved, 0, _category_indices().size())
-		Audio.play("menu_move")
-		menu.show_levels(_category_names(), select_sel, _mode_name())
-	if Input.is_action_just_pressed("ui_accept"):
-		Audio.play("menu_select")
-		_start_race(_category_indices()[select_sel])
-	elif Input.is_action_just_pressed("ui_cancel"):
-		Audio.play("menu_move")
-		_open_player_select()
 
 
 func _leaderboard_frame(dt: float) -> void:
