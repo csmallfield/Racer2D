@@ -167,13 +167,6 @@ func _on_confirm(id: String, sel: int) -> void:
 		"laps":
 			ctx["laps_sel"] = sel
 			_push("racer")
-		"racer":
-			# Phase 1 stub: adopt the sticky racer(s) and move on. Time Trial
-			# skips Confirm (spec: Racer Select -> Start).
-			if String(ctx.get("play_mode", "")) == "TIME_TRIAL":
-				_start()
-			else:
-				_push("confirm")
 		"confirm":
 			if sel == 0:
 				ctx["difficulty"] = wrapi(int(ctx.get("difficulty", 1)) + 1, 0, 3)
@@ -208,9 +201,10 @@ func _start() -> void:
 	if p_mode == "QUICK_RACE" and is_circuit:
 		laps = LAP_VALUES[clampi(int(ctx.get("laps_sel", 1)), 0, LAP_VALUES.size() - 1)]
 
-	var racers: Array = []
-	for i in range(count):
-		racers.append(main.sticky_racer(i))
+	var racers: Array = ctx.get("racers", [])
+	if racers.is_empty():
+		for i in range(count):
+			racers.append(main.sticky_racer(i))
 
 	var kind := "TIME_TRIAL" if is_tt else ("CIRCUIT" if is_circuit else "TOUR")
 	main.start_configured(p_mode, kind, count, diff, racers, laps, idx,
@@ -222,12 +216,45 @@ func _start() -> void:
 func _render() -> void:
 	var scr: Dictionary = stack.back()
 	var id: String = String(scr.id)
+	if id == "racer":
+		_open_racer_select()
+		return
 	var items := _items_for(id)
 	var sub := _subtitle_for(id)
 	if sub.is_empty():
 		menu.show_list(_title_for(id), items, int(scr.sel))
 	else:
 		menu.show_config(_title_for(id), sub, items, int(scr.sel))
+
+
+## The Racer Select step hands off to main's dedicated screen (RACER_SELECT
+## state), which resumes us via racer_done / racer_cancelled.
+func _open_racer_select() -> void:
+	var is_tt := String(ctx.get("play_mode", "")) == "TIME_TRIAL"
+	var count := 1 if is_tt else int(ctx.get("players", 1))
+	var sticky: Array = []
+	for i in range(count):
+		sticky.append(main.sticky_racer(i))
+	main.open_racer_select(count, sticky)
+
+
+## All players have locked in — carry the picks forward to Confirm (or straight
+## to the race for Time Trial, which has no Confirm step).
+func racer_done(picks: Array) -> void:
+	ctx["racers"] = picks
+	if String(ctx.get("play_mode", "")) == "TIME_TRIAL":
+		_start()
+	else:
+		_push("confirm")
+
+
+## Backed out of Racer Select — pop it and return to the previous step.
+func racer_cancelled() -> void:
+	if not stack.is_empty() and String(stack.back().id) == "racer":
+		stack.pop_back()
+	if stack.is_empty():
+		stack.append({"id": "main", "sel": 0})
+	_render()
 
 
 func _title_for(id: String) -> String:
@@ -271,8 +298,6 @@ func _items_for(id: String) -> Array[String]:
 			for v in LAP_VALUES:
 				ls.append("%d LAPS" % v)
 			return ls
-		"racer":
-			return ["CONTINUE"]
 		"confirm":
 			return ["DIFFICULTY:  %s" % DIFF_NAMES[int(ctx.get("difficulty", 1))], "START"]
 		"credits":
@@ -284,9 +309,6 @@ func _items_for(id: String) -> Array[String]:
 
 func _subtitle_for(id: String) -> Array[String]:
 	match id:
-		"racer":
-			return ["The full racer grid arrives in the next update.",
-					"Using your last-used racer for now."]
 		"confirm":
 			var lines: Array[String] = []
 			var p_mode := String(ctx.get("play_mode", ""))

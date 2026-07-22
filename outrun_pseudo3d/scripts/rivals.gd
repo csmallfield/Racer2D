@@ -33,14 +33,20 @@ var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 
 ## Grid the roster just ahead of the start line: the player begins last
 ## and races through the pack, Road Rash style.
-func spawn(main: Node2D, count: int) -> void:
+func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
 	rivals.clear()
 	leader_cp_times.clear()
 	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
-	var n := clampi(count, 0, cfg.roster.size())
+	# Roster indices still available after removing the players' picks, kept in
+	# ladder order (beatable -> fast). We field the first N of what remains.
+	var available: Array = []
+	for idx in range(cfg.roster.size()):
+		if not excluded.has(idx):
+			available.append(idx)
+	var n := clampi(count, 0, available.size())
 	for i in range(n):
-		var profile: RivalProfile = cfg.roster[i]
+		var profile: RivalProfile = cfg.roster[available[i]]
 		SpriteCatalog.register_rival(i, profile)
 		var rival := {
 			"name": profile.display_name,

@@ -182,6 +182,21 @@ static func register_player(index: int) -> void:
 	}
 
 
+## Register a player slot's car from a chosen racer profile: real art if the
+## profile assigns car_texture, otherwise a placeholder in the livery color.
+## Lets a player drive their selected racer instead of the fixed slot livery.
+static func register_player_from_profile(index: int, profile: RivalProfile) -> void:
+	get_def("player")
+	var tex: Texture2D = profile.car_texture
+	if tex == null:
+		tex = _make_car(profile.color)
+	_cache["player_%d" % index] = {
+		"texture": tex,
+		"world_w": 520.0, "world_h": 300.0, "collidable": true,
+		"map_color": profile.color,
+	}
+
+
 static func _make_rival(body: Color) -> ImageTexture:
 	var tex := _make_car(body)
 	var img := tex.get_image()

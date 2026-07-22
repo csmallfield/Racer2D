@@ -10,3 +10,6 @@ cruise_fraction = 0.965
 preferred_lane = 0.3
 boost_capacity = 4.0
 boost_aggression = 0.55
+stat_speed = 4
+stat_accel = 3
+stat_handling = 3

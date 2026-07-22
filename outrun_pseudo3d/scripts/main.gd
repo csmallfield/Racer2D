@@ -14,7 +14,7 @@ const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 ## pre-race screen); LEADERBOARD and SETTINGS remain distinct leaf screens.
 ## All menu-family states stay below COUNTDOWN so the `state >= COUNTDOWN`
 ## in-race guards elsewhere keep working.
-enum State { MENU, LEADERBOARD, SETTINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+enum State { MENU, LEADERBOARD, SETTINGS, RACER_SELECT, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 ## In-sim race kind. The higher-level menu branch (tournament vs quick race)
 ## lives in `play_mode`; the sim only needs to know circuit / tour / time trial.
 enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
@@ -61,6 +61,7 @@ var state: State = State.MENU
 var mode: Mode = Mode.TOUR
 var menu: MenuLayer
 var menu_flow: MenuFlow
+var racer_select: RacerSelectLayer
 ## Selections gathered by the menu flow. Phase 1 plumbing: play_mode/difficulty/
 ## selected_racers/current_cup are stored and made sticky but not yet read by
 ## the sim — they wire into gameplay, records, and tournaments in later phases.
@@ -92,6 +93,10 @@ func _ready() -> void:
 	menu = MenuLayer.new()
 	_build_views(1)
 	add_child(menu)   # menu draws over every viewport
+	racer_select = RacerSelectLayer.new()
+	racer_select.main = self
+	racer_select.visible = false
+	add_child(racer_select)
 	menu_flow = MenuFlow.new(self, menu)
 	_load_level(0)    # idle stage 1 as the menu backdrop
 	_enter_menu()
@@ -256,7 +261,11 @@ func _load_level(idx: int) -> void:
 	laps.clear()
 	for i in range(player_count):
 		laps.append(0)
-		SpriteCatalog.register_player(i)
+		var profile := _player_profile(i)
+		if profile != null:
+			SpriteCatalog.register_player_from_profile(i, profile)
+		else:
+			SpriteCatalog.register_player(i)
 		var p := PlayerCar.new()
 		p.input_prefix = "p%d_" % i
 		# Side-by-side grid for multiple players, staggered slightly.
@@ -280,7 +289,8 @@ func _load_level(idx: int) -> void:
 	for i in range(player_count):
 		_sync_mirror(i, true)
 	rivals = RivalManager.new()
-	rivals.spawn(self, level.rival_count if mode != Mode.TIME_TRIAL else 0)
+	rivals.spawn(self, level.rival_count if mode != Mode.TIME_TRIAL else 0,
+			_excluded_racers())
 
 	time_left = section_time
 	_last_beep_second = -1
@@ -491,6 +501,8 @@ func _process(dt: float) -> void:
 			_leaderboard_frame(dt)
 		State.SETTINGS:
 			_settings_frame(dt)
+		State.RACER_SELECT:
+			racer_select.frame(dt)
 		State.COUNTDOWN:
 			_countdown_frame(dt)
 		State.RUNNING:
@@ -581,6 +593,50 @@ func start_configured(p_mode: String, race_kind: String, count: int,
 	if count != player_count:
 		_build_views(count)
 	_start_race(idx)
+
+
+# === RACER SELECT ===
+
+## Open the Racer Select screen for `count` players (called by the menu flow).
+## The flow resumes via _racer_select_done / _racer_select_cancel below.
+func open_racer_select(count: int, sticky: Array) -> void:
+	state = State.RACER_SELECT
+	menu.hide_menu()
+	racer_select.open(GameConfig.race.roster, count, sticky)
+
+
+func _racer_select_done(picks: Array) -> void:
+	racer_select.close()
+	state = State.MENU
+	menu_flow.racer_done(picks)
+
+
+func _racer_select_cancel() -> void:
+	racer_select.close()
+	state = State.MENU
+	menu_flow.racer_cancelled()
+
+
+## The roster profile a player slot chose, or null to fall back to the fixed
+## slot livery. selected_racers holds roster indices set at race start.
+func _player_profile(slot: int) -> RivalProfile:
+	if slot < selected_racers.size():
+		var idx: int = int(selected_racers[slot])
+		var roster: Array = GameConfig.race.roster
+		if idx >= 0 and idx < roster.size():
+			return roster[idx]
+	return null
+
+
+## Unique roster indices the players picked — excluded from the AI field so
+## nobody races their own clone.
+func _excluded_racers() -> Array:
+	var out: Array = []
+	for r in selected_racers:
+		var idx: int = int(r)
+		if not out.has(idx):
+			out.append(idx)
+	return out
 
 
 ## Settings screen: up/down select, left/right adjust (applied live),

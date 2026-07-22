@@ -22,3 +22,16 @@ extends Resource
 ## Governs how quickly they take valid opportunities: straights while
 ## attacking the player or sprinting for the line.
 @export_range(0.0, 1.0) var boost_aggression := 0.5
+
+@export_group("Selection Screen")
+## Grid profile picture. Leave empty for a flat placeholder in `color`.
+@export var portrait: Texture2D
+## Beauty illustration (character + car) for the select detail panel.
+## Leave empty for a placeholder block; drop in real art here later.
+@export var illustration: Texture2D
+## Player-facing stat bars (1..5). Deliberately separate from the AI-tuning
+## fields above so what a player sees can be tuned apart from how the car
+## actually drives — the two only converge in a later phase.
+@export_range(1, 5) var stat_speed := 3
+@export_range(1, 5) var stat_accel := 3
+@export_range(1, 5) var stat_handling := 3
