@@ -15,6 +15,8 @@ var sfx_volume := 1.0
 # the last-used racer id per player slot.
 var difficulty := 1
 var sticky_racers: Array = []
+## Arcade initials per player slot, pre-filled on the record-entry screen.
+var sticky_initials: Array = ["AAA", "AAA", "AAA", "AAA"]
 # Seeded from resources/retro_filter.tres (designer defaults); the menu
 # subset is then overridden by the user save. Flicker and scanline density
 # are resource-only.
@@ -82,6 +84,7 @@ func save() -> void:
 		"scanlines": crt_scanlines, "fringe": crt_fringe,
 		"vignette": crt_vignette, "noise": crt_noise,
 		"difficulty": difficulty, "racers": sticky_racers,
+		"initials": sticky_initials,
 	}))
 
 
@@ -106,3 +109,5 @@ func _load() -> void:
 	difficulty = int(d.get("difficulty", difficulty))
 	var r: Variant = d.get("racers", sticky_racers)
 	sticky_racers = r if r is Array else sticky_racers
+	var ini: Variant = d.get("initials", sticky_initials)
+	sticky_initials = ini if ini is Array else sticky_initials

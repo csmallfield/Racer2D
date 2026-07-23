@@ -103,27 +103,42 @@ func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 
 ## Best-times board for one stage. columns: [{title, times}] — tour stages
 ## show TOUR + TIME TRIAL side by side, circuits a single CIRCUIT column.
-func show_board(stage_name: String, columns: Array) -> void:
+## One bucket at a time, four columns: rank / initials / racer / time.
+## `entries` are Records rows; `racer_names` maps profile stem -> display name.
+func show_board(stage_name: String, filter_name: String, metric: String,
+		entries: Array, racer_names: Dictionary) -> void:
 	visible = true
 	_title_label.text = "BEST TIMES"
 	var rows := "[center][b]%s[/b]\n" % stage_name
-	rows += "[color=#888888]steer to change stage  •  brake for menu[/color]\n\n[/center]"
-	rows += "[table=%d]" % (columns.size() * 2)
-	for col in columns:
-		rows += "[cell][color=#ffd24d]  %s[/color][/cell][cell][/cell]" % String(col.title)
+	rows += "[color=#ffd24d]%s  —  %s[/color]\n" % [filter_name, metric]
+	rows += "[color=#888888]steer to change stage  •  up/down for difficulty"
+	rows += "  •  brake for menu[/color]\n\n[/center]"
+	rows += "[table=4]"
 	for i in range(Records.MAX_ENTRIES):
-		for col in columns:
-			rows += _time_cell(i, col.times)
+		rows += _entry_row(i, entries, racer_names)
 	rows += "[/table]"
 	_content.text = rows
 
 
-static func _time_cell(i: int, times: Array) -> String:
-	var rank := "[cell][color=#e8e8e8]  %2d.  [/color][/cell]" % (i + 1)
-	if i < times.size():
-		return rank + "[cell][color=#e8e8e8]%s   [/color][/cell]" \
-				% HudLayer.format_time(float(times[i]))
-	return rank + "[cell][color=#555555]—:——   [/color][/cell]"
+static func _entry_row(i: int, entries: Array, racer_names: Dictionary) -> String:
+	var out := "[cell][color=#e8e8e8]  %2d.  [/color][/cell]" % (i + 1)
+	if i >= entries.size():
+		out += "[cell][color=#555555]---  [/color][/cell]"
+		out += "[cell][color=#555555]—      [/color][/cell]"
+		out += "[cell][color=#555555]—:——   [/color][/cell]"
+		return out
+	var e: Dictionary = entries[i]
+	var stem := String(e.get("racer", ""))
+	var who := String(racer_names.get(stem, stem.to_upper()))
+	if who.is_empty():
+		who = "—"
+	if who.length() > 9:
+		who = who.substr(0, 9)
+	out += "[cell][color=#ffd24d]%s  [/color][/cell]" % String(e.get("initials", "---"))
+	out += "[cell][color=#9fb4c8]%s      [/color][/cell]" % who
+	out += "[cell][color=#e8e8e8]%s   [/color][/cell]" \
+			% HudLayer.format_time(float(e.get("t", 0.0)))
+	return out
 
 
 static func _row(text: String, selected: bool) -> String:

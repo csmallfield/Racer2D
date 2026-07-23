@@ -14,7 +14,7 @@ const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 ## pre-race screen); LEADERBOARD and SETTINGS remain distinct leaf screens.
 ## All menu-family states stay below COUNTDOWN so the `state >= COUNTDOWN`
 ## in-race guards elsewhere keep working.
-enum State { MENU, LEADERBOARD, SETTINGS, RACER_SELECT, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+enum State { MENU, LEADERBOARD, SETTINGS, RACER_SELECT, INITIALS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 ## In-sim race kind. The higher-level menu branch (tournament vs quick race)
 ## lives in `play_mode`; the sim only needs to know circuit / tour / time trial.
 enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
@@ -36,6 +36,8 @@ var level_names: Array = []
 var level_musics: Array = []
 var level_laps: Array = []      # per level: 0 = tour, >0 = circuit lap count
 var laps: Array[int] = []       # per player: completed laps this race
+var lap_start_time: Array[float] = []  # race clock at the current lap's start
+var best_lap: Array[float] = []        # best lap this race, 0 = none yet
 var level_index := 0
 var level: TrackLevel
 var track: TrackBuilder
@@ -62,6 +64,7 @@ var mode: Mode = Mode.TOUR
 var menu: MenuLayer
 var menu_flow: MenuFlow
 var racer_select: RacerSelectLayer
+var initials_entry: InitialsEntryLayer
 ## Selections gathered by the menu flow. Phase 1 plumbing: play_mode/difficulty/
 ## selected_racers/current_cup are stored and made sticky but not yet read by
 ## the sim — they wire into gameplay, records, and tournaments in later phases.
@@ -70,6 +73,9 @@ var play_mode := "QUICK_RACE"   # TOURNAMENT / QUICK_RACE / TIME_TRIAL
 var difficulty := 1             # 0 Easy, 1 Normal, 2 Hard
 var selected_racers: Array = [] # racer id per player slot
 var lap_override := 0           # >0 overrides level.laps (Quick Race circuits)
+var board_filter := 1           # leaderboard bucket index into Records.BUCKETS
+var _pending_records: Array = []  # qualifying times awaiting initials
+var _record_rank := -1          # P1's rank this race, for the results title
 var current_cup := ""           # tournament cup id (series logic is a later phase)
 var menu_sel := 0
 var select_sel := 0
@@ -97,6 +103,10 @@ func _ready() -> void:
 	racer_select.main = self
 	racer_select.visible = false
 	add_child(racer_select)
+	initials_entry = InitialsEntryLayer.new()
+	initials_entry.main = self
+	initials_entry.visible = false
+	add_child(initials_entry)
 	menu_flow = MenuFlow.new(self, menu)
 	_load_level(0)    # idle stage 1 as the menu backdrop
 	_enter_menu()
@@ -263,8 +273,12 @@ func _load_level(idx: int) -> void:
 	_prev_boosting.clear()
 	_bump_cd.clear()
 	laps.clear()
+	lap_start_time.clear()
+	best_lap.clear()
 	for i in range(player_count):
 		laps.append(0)
+		lap_start_time.append(0.0)
+		best_lap.append(0.0)
 		var profile := _player_profile(i)
 		if profile != null:
 			SpriteCatalog.register_player_from_profile(i, profile)
@@ -507,6 +521,8 @@ func _process(dt: float) -> void:
 			_settings_frame(dt)
 		State.RACER_SELECT:
 			racer_select.frame(dt)
+		State.INITIALS:
+			initials_entry.frame(dt)
 		State.COUNTDOWN:
 			_countdown_frame(dt)
 		State.RUNNING:
@@ -736,6 +752,15 @@ func _leaderboard_frame(dt: float) -> void:
 		select_sel = wrapi(select_sel + moved, 0, level_names.size())
 		Audio.play("menu_move")
 		_refresh_board()
+	var filt := 0
+	if Input.is_action_just_pressed("ui_down"):
+		filt = 1
+	elif Input.is_action_just_pressed("ui_up"):
+		filt = -1
+	if filt != 0:
+		board_filter = wrapi(board_filter + filt, 0, Records.BUCKETS.size())
+		Audio.play("menu_move")
+		_refresh_board()
 	if (Input.is_action_just_pressed("ui_cancel")
 			or Input.is_action_just_pressed("ui_accept")):
 		Audio.play("menu_move")
@@ -744,13 +769,21 @@ func _leaderboard_frame(dt: float) -> void:
 
 func _refresh_board() -> void:
 	var fname := String(level_paths[select_sel]).get_file()
-	var columns: Array = []
-	if int(level_laps[select_sel]) > 0:
-		columns = [{"title": "CIRCUIT", "times": Records.get_times(fname, "circuit")}]
-	else:
-		columns = [{"title": "TOUR", "times": Records.get_times(fname, "race")},
-				{"title": "TIME TRIAL", "times": Records.get_times(fname, "time_trial")}]
-	menu.show_board(String(level_names[select_sel]), columns)
+	# Circuits are ranked on best lap, tours on total — a property of the
+	# track, so the same board reads correctly whatever mode set the time.
+	var metric := "BEST LAP" if int(level_laps[select_sel]) > 0 else "TOTAL"
+	var bucket: String = Records.BUCKETS[board_filter]
+	menu.show_board(String(level_names[select_sel]),
+			Records.BUCKET_NAMES[board_filter], metric,
+			Records.get_entries(fname, bucket), _racer_names())
+
+
+## Map of profile stem -> display name, for rendering the racer column.
+func _racer_names() -> Dictionary:
+	var out: Dictionary = {}
+	for prof in GameConfig.race.roster:
+		out[_racer_stem(prof)] = String(prof.display_name)
+	return out
 
 
 ## Pre-race: racers held on the grid, traffic ambling, big 3-2-1 center
@@ -794,6 +827,12 @@ func _run_frame(dt: float) -> void:
 		_check_collisions(i)
 		_player_shunts(i, dt)
 		if crossed:
+			# Close the lap first: the crossing that ends the race is this
+			# same branch, so the final lap is lost if captured any later.
+			var lap_t := race_time - lap_start_time[i]
+			lap_start_time[i] = race_time
+			if lap_t > 0.0 and (best_lap[i] <= 0.0 or lap_t < best_lap[i]):
+				best_lap[i] = lap_t
 			laps[i] += 1
 			if laps[i] >= total_laps():
 				_on_player_finish(i)
@@ -940,29 +979,104 @@ func _mark_finished(i: int, t: float) -> void:
 	_finishers += 1
 
 
+## Race over. Collect any qualifying times first: if there are some, the
+## initials screen runs BEFORE the results board, so the board stays the last
+## thing on screen and its accept-to-continue behaviour is unchanged.
 func _end_race() -> void:
+	_record_rank = -1
+	_pending_records = _collect_records()
+	if not _pending_records.is_empty():
+		state = State.INITIALS
+		var prompts: Array = []
+		for rec in _pending_records:
+			prompts.append({"slot": rec.slot, "rank": rec.rank,
+					"time": rec.t, "metric": rec.metric,
+					"initials": _sticky_initials(int(rec.slot))})
+		initials_entry.open(prompts)
+		return
+	_finish_stage_clear()
+
+
+## Every human who FINISHED and set a top-10 time. A run that was abandoned,
+## timed out, or missed the splitscreen grace deadline (finish_time == INF)
+## sets nothing — being eliminated is no way to set a record.
+func _collect_records() -> Array:
+	var fname := String(level_paths[level_index]).get_file()
+	var bucket := Records.bucket_for(mode == Mode.TIME_TRIAL, difficulty)
+	var is_circuit: bool = level.laps > 0
+	var out: Array = []
+	for i in range(players.size()):
+		if not finished[i] or is_inf(finish_time[i]):
+			continue
+		# Circuits are ranked on best lap, tours on total time — decided by
+		# the track, not the mode, so a circuit Time Trial still logs a lap.
+		var t: float = best_lap[i] if is_circuit else finish_time[i]
+		if not Records.qualifies(fname, bucket, t):
+			continue
+		out.append({"slot": i, "t": t, "level": fname, "bucket": bucket,
+				"metric": "BEST LAP" if is_circuit else "TOTAL",
+				"racer": _racer_stem(_player_profile(i)), "rank": 0})
+	return out
+
+
+## Initials confirmed for every qualifying time — commit them and continue to
+## the results board. add_entry may still return -1 if an earlier write in
+## this same batch pushed a later one off the board; that's correct.
+func _initials_done(entered: Array) -> void:
+	initials_entry.close()
+	for k in range(_pending_records.size()):
+		var rec: Dictionary = _pending_records[k]
+		var text: String = String(entered[k]) if k < entered.size() else "AAA"
+		var rank: int = Records.add_entry(String(rec.level), String(rec.bucket),
+				{"t": float(rec.t), "racer": String(rec.racer), "initials": text})
+		_set_sticky_initials(int(rec.slot), text)
+		if int(rec.slot) == 0:
+			_record_rank = rank
+	Settings.save()
+	_pending_records.clear()
+	_finish_stage_clear()
+
+
+func _sticky_initials(slot: int) -> String:
+	var arr: Array = Settings.sticky_initials
+	if slot < arr.size():
+		return String(arr[slot])
+	return "AAA"
+
+
+func _set_sticky_initials(slot: int, text: String) -> void:
+	var arr: Array = Settings.sticky_initials
+	while arr.size() <= slot:
+		arr.append("AAA")
+	arr[slot] = text
+	Settings.sticky_initials = arr
+
+
+## Stable identifier for a racer profile: the .tres stem, so records survive
+## roster reordering. Empty when no racer was chosen.
+func _racer_stem(profile: RivalProfile) -> String:
+	if profile == null:
+		return ""
+	var path := String(profile.resource_path)
+	if path.is_empty():
+		return String(profile.display_name).to_lower()
+	return path.get_file().get_basename()
+
+
+func _finish_stage_clear() -> void:
 	state = State.STAGE_CLEAR
 	var fname := String(level_paths[level_index]).get_file()
-	var mode_key := "race"
-	if mode == Mode.CIRCUIT:
-		mode_key = "circuit"
-	elif mode == Mode.TIME_TRIAL:
-		mode_key = "time_trial"
-	var best_rank := -1
-	if solo() and finish_time[0] != INF:
-		best_rank = Records.add_time(fname, mode_key, finish_time[0])
+	var best_rank := _record_rank
 
 	if solo() and mode == Mode.TIME_TRIAL:
-		var times: Array = Records.get_times(fname, mode_key)
+		var bucket := Records.bucket_for(true, difficulty)
+		var recs: Array = Records.get_entries(fname, bucket)
 		var entries: Array = []
-		var marked := false
-		for k in range(times.size()):
-			var is_you := (not marked
-					and absf(float(times[k]) - finish_time[0]) < 0.0005)
-			if is_you:
-				marked = true
-			entries.append({"name": "YOU" if is_you else "-",
-					"time": float(times[k]), "is_player": is_you})
+		for k in range(recs.size()):
+			var e: Dictionary = recs[k]
+			var is_you := (best_rank > 0 and k == best_rank - 1)
+			entries.append({"name": String(e.get("initials", "---")),
+					"time": float(e.get("t", 0.0)), "is_player": is_you})
 		_board_title = "TIME TRIAL — %s" % HudLayer.format_time(finish_time[0])
 		if best_rank > 0:
 			_board_title += "  (BEST #%d)" % best_rank
