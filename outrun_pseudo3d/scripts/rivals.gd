@@ -39,12 +39,19 @@ func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
 	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
 	# Roster indices still available after removing the players' picks, kept in
-	# ladder order (beatable -> fast). We field the first N of what remains.
+	# ladder order (beatable -> fast). We field the first N of what remains —
+	# or the LAST N on Hard, which fields the top seeds instead.
+	var diff: DifficultyProfile = GameConfig.difficulty
 	var available: Array = []
 	for idx in range(cfg.roster.size()):
 		if not excluded.has(idx):
 			available.append(idx)
-	var n := clampi(count, 0, available.size())
+	if diff.field_top_of_ladder:
+		available.reverse()
+	var wanted := count
+	if diff.rival_count_cap > 0:
+		wanted = mini(wanted, diff.rival_count_cap)
+	var n := clampi(wanted, 0, available.size())
 	for i in range(n):
 		var profile: RivalProfile = cfg.roster[available[i]]
 		SpriteCatalog.register_rival(i, profile)
@@ -59,7 +66,7 @@ func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
 			# script the finish and different races have different heroes.
 			"base_speed": (profile.cruise_fraction + randf_range(
 					-cfg.form_variance, cfg.form_variance))
-					* GameConfig.player.max_speed,
+					* GameConfig.player.max_speed * diff.cruise_scale,
 			"bonk_t": 0.0,
 			"dodge_dir": 0.0,      # committed dodge direction (hysteresis)
 			"dodge_t": 0.0,        # time remaining on the commitment
@@ -71,7 +78,8 @@ func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
 			"prev_curve": 0.0,
 			"boost_cap": profile.boost_capacity,
 			"boosting": false,
-			"aggression": profile.boost_aggression,
+			"aggression": clampf(profile.boost_aggression * diff.aggression_scale,
+					0.0, 1.0),
 			"was_ahead": true,
 			"finished": false,
 		}

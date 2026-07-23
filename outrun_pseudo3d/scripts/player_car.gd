@@ -5,7 +5,10 @@ extends RefCounted
 ## position x is normalized so that -1..1 spans the road surface.
 
 ## All tunables live in resources/player_settings.tres (via GameConfig).
+## Both are captured at construction; main.gd applies the difficulty scaling
+## to GameConfig before building players, so these are already correct.
 var s: PlayerSettings = GameConfig.player
+var d: DifficultyProfile = GameConfig.difficulty
 var input_prefix := "p0_"   # per-player action prefix (split screen)
 
 
@@ -45,6 +48,15 @@ func update(dt: float, main: Node) -> bool:
 
 	# Centrifugal force: curves push the car toward the outside.
 	x -= dx * speed_percent * seg.curve * s.centrifugal * control
+
+	# Easy-mode edge assist: a gentle pull back toward the road once the car
+	# strays near the edge. Suppressed while the player actively steers
+	# outward, so deliberate cuts across the grass still work and the assist
+	# never wrestles the stick. Ground only — no help in the air.
+	if d.edge_assist > 0.0 and air <= s.air_threshold and absf(x) > 0.85:
+		var outward := signf(x)
+		if steer * outward < 0.2:
+			x -= outward * dx * d.edge_assist * 0.5
 
 	# Boost: hold to burn fuel for straight-line speed. Ground only.
 	boosting = (Input.is_action_pressed(input_prefix + "boost") and boost > 0.0

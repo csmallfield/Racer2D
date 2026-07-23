@@ -232,6 +232,9 @@ func _discover_levels() -> void:
 func _load_level(idx: int) -> void:
 	if level_paths.is_empty():
 		return
+	# Rebuild the difficulty-scaled tuning first: PlayerCar and RivalManager
+	# both cache GameConfig.player / GameConfig.race at construction below.
+	GameConfig.apply_difficulty(difficulty)
 	level_index = ((idx % level_paths.size()) + level_paths.size()) % level_paths.size()
 	var script: GDScript = load(level_paths[level_index])
 	level = script.new()
@@ -244,7 +247,8 @@ func _load_level(idx: int) -> void:
 
 	cp_zs = track.mark_checkpoints(level.checkpoint_count)
 	_init_pickups()
-	section_time = level.time_limit / float(level.checkpoint_count + 1)
+	section_time = level.time_limit * GameConfig.difficulty.time_limit_scale \
+			/ float(level.checkpoint_count + 1)
 	race_time = 0.0
 	_finishers = 0
 	_finish_deadline = -1.0
@@ -1199,7 +1203,8 @@ func _check_collisions(i: int) -> void:
 				continue
 			var sw: float = def.world_w / RoadRenderer.ROAD_WIDTH
 			if _overlap(p.x, player_w, spr.offset, sw):
-				p.speed = GameConfig.player.max_speed * 0.06
+				p.speed = GameConfig.player.max_speed \
+						* GameConfig.difficulty.crash_speed_keep
 				Audio.play("crash", 0.0, 1.0, 0.5)
 				break
 

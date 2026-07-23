@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="DifficultyProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/difficulty_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "EASY"
+rival_count_cap = 5
+field_top_of_ladder = false
+cruise_scale = 0.94
+curve_slowdown_scale = 1.35
+form_variance_scale = 1.4
+pack_bonus_scale = 0.6
+rubber_behind_scale = 0.9
+lookahead_scale = 0.55
+apex_bias_scale = 0.6
+aggression_scale = 0.6
+time_limit_scale = 1.25
+crash_speed_keep = 0.35
+centrifugal_scale = 0.5
+off_road_limit_scale = 1.6
+off_road_decel_scale = 0.5
+edge_assist = 0.9
