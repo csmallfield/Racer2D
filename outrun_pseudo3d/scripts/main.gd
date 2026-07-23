@@ -14,7 +14,7 @@ const PLAYER_LABELS: Array[String] = ["P1", "P2", "P3", "P4"]
 ## pre-race screen); LEADERBOARD and SETTINGS remain distinct leaf screens.
 ## All menu-family states stay below COUNTDOWN so the `state >= COUNTDOWN`
 ## in-race guards elsewhere keep working.
-enum State { MENU, LEADERBOARD, SETTINGS, RACER_SELECT, INITIALS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
+enum State { MENU, LEADERBOARD, SETTINGS, RACER_SELECT, INITIALS, STANDINGS, COUNTDOWN, RUNNING, STAGE_CLEAR, GAME_OVER, PAUSED }
 ## In-sim race kind. The higher-level menu branch (tournament vs quick race)
 ## lives in `play_mode`; the sim only needs to know circuit / tour / time trial.
 enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
@@ -65,6 +65,9 @@ var menu: MenuLayer
 var menu_flow: MenuFlow
 var racer_select: RacerSelectLayer
 var initials_entry: InitialsEntryLayer
+var standings_layer: StandingsLayer
+## Tournament in progress, or null outside one. Session-only.
+var series: SeriesState
 ## Selections gathered by the menu flow. Phase 1 plumbing: play_mode/difficulty/
 ## selected_racers/current_cup are stored and made sticky but not yet read by
 ## the sim — they wire into gameplay, records, and tournaments in later phases.
@@ -76,7 +79,7 @@ var lap_override := 0           # >0 overrides level.laps (Quick Race circuits)
 var board_filter := 1           # leaderboard bucket index into Records.BUCKETS
 var _pending_records: Array = []  # qualifying times awaiting initials
 var _record_rank := -1          # P1's rank this race, for the results title
-var current_cup := ""           # tournament cup id (series logic is a later phase)
+var current_cup := -1           # index into GameConfig.race.cups, -1 = not a tournament
 var menu_sel := 0
 var select_sel := 0
 var paused_from: State = State.RUNNING
@@ -107,6 +110,10 @@ func _ready() -> void:
 	initials_entry.main = self
 	initials_entry.visible = false
 	add_child(initials_entry)
+	standings_layer = StandingsLayer.new()
+	standings_layer.main = self
+	standings_layer.visible = false
+	add_child(standings_layer)
 	menu_flow = MenuFlow.new(self, menu)
 	_load_level(0)    # idle stage 1 as the menu backdrop
 	_enter_menu()
@@ -248,6 +255,10 @@ func _load_level(idx: int) -> void:
 	level_index = ((idx % level_paths.size()) + level_paths.size()) % level_paths.size()
 	var script: GDScript = load(level_paths[level_index])
 	level = script.new()
+	# A cup manifest is just a track list, so a round's type comes from its
+	# level rather than a cup-wide flag — mixed cups work for free.
+	if series != null:
+		mode = Mode.CIRCUIT if level.laps > 0 else Mode.TOUR
 
 	track = TrackBuilder.new()
 	level.build(track)
@@ -307,8 +318,11 @@ func _load_level(idx: int) -> void:
 	for i in range(player_count):
 		_sync_mirror(i, true)
 	rivals = RivalManager.new()
+	# A tournament fields the cast fixed at cup start, so the same rivals
+	# contest every round; single races derive theirs as usual.
 	rivals.spawn(self, level.rival_count if mode != Mode.TIME_TRIAL else 0,
-			_excluded_racers())
+			_excluded_racers(),
+			series.rival_indices if series != null else [])
 
 	time_left = section_time
 	_last_beep_second = -1
@@ -366,6 +380,7 @@ func _start_race(idx: int) -> void:
 func _enter_menu() -> void:
 	state = State.MENU
 	menu_sel = 0
+	series = null   # session-only: quitting out abandons the cup
 	for v in views:
 		v.hud.set_message("")
 		v.hud.hide_leaderboard()
@@ -484,7 +499,9 @@ func _process(dt: float) -> void:
 	if track == null:
 		return
 
-	if state >= State.COUNTDOWN:
+	# Restart and level-skip are debug/convenience affordances; a tournament
+	# round has to stand or the DNF rule means nothing.
+	if state >= State.COUNTDOWN and series == null:
 		if Input.is_action_just_pressed("restart"):
 			_start_race(level_index)
 			return
@@ -523,6 +540,8 @@ func _process(dt: float) -> void:
 			racer_select.frame(dt)
 		State.INITIALS:
 			initials_entry.frame(dt)
+		State.STANDINGS:
+			standings_layer.frame(dt)
 		State.COUNTDOWN:
 			_countdown_frame(dt)
 		State.RUNNING:
@@ -539,12 +558,19 @@ func _process(dt: float) -> void:
 				for i in range(views.size()):
 					views[i].hud.show_leaderboard(live, _view_titles[i])
 			if Input.is_action_just_pressed("ui_accept") or _any_accel():
-				_start_race(_next_in_category(level_index, 1))
+				if series != null:
+					_tournament_round_done([])
+				else:
+					_start_race(_next_in_category(level_index, 1))
 		State.GAME_OVER:
 			for i in range(players.size()):
 				_coast_player(i, dt, 0.0)
 			_update_traffic(dt)
 			rivals.update(dt, self)
+			# No retry in a cup: the DNF stands and scores 0, which is the
+			# only thing separating a timeout from finishing last.
+			if series != null and Input.is_action_just_pressed("ui_accept"):
+				_tournament_round_done([0])
 		State.PAUSED:
 			pass
 
@@ -592,7 +618,7 @@ func sticky_racer(slot: int) -> int:
 ## ("TOUR" / "CIRCUIT" / "TIME_TRIAL"); p_mode is the menu branch kept for
 ## later phases (tournament series, difficulty-filtered records, etc.).
 func start_configured(p_mode: String, race_kind: String, count: int,
-		diff: int, racers: Array, laps: int, idx: int, cup: String) -> void:
+		diff: int, racers: Array, laps: int, idx: int, cup_idx: int) -> void:
 	play_mode = p_mode
 	match race_kind:
 		"CIRCUIT":
@@ -604,7 +630,7 @@ func start_configured(p_mode: String, race_kind: String, count: int,
 	difficulty = diff
 	selected_racers = racers.duplicate()
 	lap_override = laps
-	current_cup = cup
+	current_cup = cup_idx
 	# Persist sticky prefs (Time Trial has no difficulty, so leave it be).
 	if p_mode != "TIME_TRIAL":
 		Settings.difficulty = diff
@@ -612,7 +638,102 @@ func start_configured(p_mode: String, race_kind: String, count: int,
 	Settings.save()
 	if count != player_count:
 		_build_views(count)
+
+	series = null
+	if p_mode == "TOURNAMENT":
+		var cups: Array = GameConfig.race.cups
+		if cup_idx >= 0 and cup_idx < cups.size():
+			_begin_series(cups[cup_idx], count, racers)
+			idx = _level_index_by_file(series.current_track())
+			lap_override = series.cup.lap_override
 	_start_race(idx)
+
+
+# === TOURNAMENT ===
+
+## Fix the field for the whole cup. Difficulty is already applied by now, so
+## the rival cast, the exclusions and therefore the field size are all decided
+## once here and reused every round — which is what makes standings mean
+## anything and lets the points table be chosen up front.
+func _begin_series(cup: CupDefinition, count: int, racers: Array) -> void:
+	GameConfig.apply_difficulty(difficulty)
+	var excluded: Array = []
+	for r in racers:
+		var ri := int(r)
+		if not excluded.has(ri):
+			excluded.append(ri)
+	var rival_idx := RivalManager.field_for(GameConfig.race.roster.size(), excluded)
+	series = SeriesState.new()
+	series.setup(cup, count, racers, rival_idx, GameConfig.race.roster)
+
+
+func _level_index_by_file(fname: String) -> int:
+	for i in range(level_paths.size()):
+		if String(level_paths[i]).get_file() == fname:
+			return i
+	return 0
+
+
+## Finishing order for the round as entrant keys, best first, plus the set
+## that failed to finish and the finishers' times. Finishers rank by time;
+## anyone still on the road ranks by progress at the moment the race ended.
+func _series_round_result(dnf_slots: Array) -> Dictionary:
+	var done: Array = []
+	var racing: Array = []
+	var times: Dictionary = {}
+	var dnf: Array = []
+
+	for i in range(players.size()):
+		var key := SeriesState.player_key(i)
+		if dnf_slots.has(i) or not finished[i] or is_inf(finish_time[i]):
+			dnf.append(key)
+			racing.append({"key": key, "z": _effective_progress(i)})
+		else:
+			done.append({"key": key, "t": finish_time[i]})
+			times[key] = finish_time[i]
+	for r in rivals.rivals:
+		var rk := String(r.get("stem", ""))
+		if float(r.finish_time) >= 0.0:
+			done.append({"key": rk, "t": float(r.finish_time)})
+			times[rk] = float(r.finish_time)
+		else:
+			racing.append({"key": rk, "z": float(r.z)})
+
+	done.sort_custom(func(a, b): return float(a.t) < float(b.t))
+	racing.sort_custom(func(a, b): return float(a.z) > float(b.z))
+	var order: Array = []
+	for e in done:
+		order.append(String(e.key))
+	for e in racing:
+		order.append(String(e.key))
+	return {"order": order, "dnf": dnf, "times": times}
+
+
+## Round over (finished or timed out) — score it and show the table.
+func _tournament_round_done(dnf_slots: Array) -> void:
+	var res := _series_round_result(dnf_slots)
+	series.score_round(res.order, res.dnf, res.times)
+	var rows := series.standings()
+	var final := series.is_final_round()
+	state = State.STANDINGS
+	menu.hide_menu()
+	for v in views:
+		v.hud.hide_leaderboard()
+		v.hud.set_message("")
+	standings_layer.open(series.cup.display_name, series.round_index,
+			series.total_rounds(), rows, final)
+	series.commit_positions(rows)
+
+
+## Standings dismissed: next round, or back to the menu when the cup is done.
+func _standings_done() -> void:
+	standings_layer.close()
+	if series == null or series.is_final_round():
+		series = null
+		_enter_menu()
+		return
+	lap_override = series.cup.lap_override
+	_start_race(_level_index_by_file(series.current_track()))
 
 
 # === RACER SELECT ===
@@ -657,6 +778,28 @@ func _excluded_racers() -> Array:
 		if not out.has(idx):
 			out.append(idx)
 	return out
+
+
+# === CHECKPOINT REWARDS ===
+
+## Top up the section timer, bounded. Banking is capped at a multiple of one
+## section's allowance so a quick driver keeps a cushion without the buffer
+## compounding until the clock stops mattering. Never reduces what you hold:
+## crossing a checkpoint can only ever help.
+func _award_checkpoint_time() -> void:
+	var cap := section_time * GameConfig.difficulty.checkpoint_time_cap
+	time_left = maxf(time_left, minf(time_left + section_time, cap))
+	_last_beep_second = -1
+
+
+## Boost for crossing a checkpoint, for one player slot. Applies in every
+## mode and to every racer (rivals get the same in RivalManager.update), and
+## is capped at tank size — so a leader running full gains nothing while a
+## straggler running empty gains all of it.
+func _award_checkpoint_boost(i: int) -> void:
+	var p := players[i]
+	p.boost = minf(p.boost + GameConfig.race.checkpoint_boost_amount,
+			GameConfig.player.boost_capacity)
 
 
 ## Settings screen: up/down select, left/right adjust (applied live),
@@ -839,8 +982,8 @@ func _run_frame(dt: float) -> void:
 			else:
 				# Lap line: refill the section timer and mark the lap.
 				if solo():
-					time_left += section_time
-					_last_beep_second = -1
+					_award_checkpoint_time()
+				_award_checkpoint_boost(i)
 				Audio.play("checkpoint")
 				views[i].hud.set_flash("LAP %d / %d" % [laps[i] + 1, total_laps()])
 
@@ -867,7 +1010,8 @@ func _run_frame(dt: float) -> void:
 		if not finished[0] and time_left <= 0.0:
 			time_left = 0.0
 			state = State.GAME_OVER
-			views[0].hud.set_message("TIME UP — press R to retry")
+			views[0].hud.set_message("TIME UP — press ENTER for standings"
+					if series != null else "TIME UP — press R to retry")
 			Audio.play("game_over")
 			return
 
@@ -1139,8 +1283,8 @@ func _check_player_checkpoint(i: int, prev_z: float) -> void:
 	if prev_z < cp_z and p.position_z >= cp_z:
 		var hud: HudLayer = views[i].hud
 		if solo():
-			time_left += section_time
-			_last_beep_second = -1
+			_award_checkpoint_time()
+		_award_checkpoint_boost(i)
 		Audio.play("checkpoint")
 		if mode == Mode.TIME_TRIAL and solo():
 			hud.set_flash("CHECKPOINT")

@@ -147,8 +147,7 @@ func _on_confirm(id: String, sel: int) -> void:
 			else:
 				_push("type")
 		"cup":
-			ctx["is_circuit"] = sel == 0
-			ctx["cup"] = "CIRCUIT CUP" if sel == 0 else "TOUR CUP"
+			ctx["cup_idx"] = sel
 			_push("racer")
 		"type", "tt_type":
 			ctx["is_circuit"] = sel == 0
@@ -188,12 +187,10 @@ func _start() -> void:
 	var is_tt := p_mode == "TIME_TRIAL"
 	var is_circuit := bool(ctx.get("is_circuit", false))
 
-	var idx: int
-	if p_mode == "TOURNAMENT":
-		var lvls := _levels_of_type(is_circuit)   # cup starts on its first track (stub)
-		idx = int(lvls[0]) if not lvls.is_empty() else 0
-	else:
-		idx = int(ctx.get("track_idx", 0))
+	# Tournament round 1 comes from the cup manifest; main resolves the
+	# filename and owns the series from there.
+	var cup_idx := int(ctx.get("cup_idx", -1)) if p_mode == "TOURNAMENT" else -1
+	var idx := int(ctx.get("track_idx", 0))
 
 	var count := 1 if is_tt else int(ctx.get("players", 1))
 	var diff := 1 if is_tt else int(ctx.get("difficulty", 1))
@@ -207,8 +204,26 @@ func _start() -> void:
 			racers.append(main.sticky_racer(i))
 
 	var kind := "TIME_TRIAL" if is_tt else ("CIRCUIT" if is_circuit else "TOUR")
-	main.start_configured(p_mode, kind, count, diff, racers, laps, idx,
-			String(ctx.get("cup", "")))
+	main.start_configured(p_mode, kind, count, diff, racers, laps, idx, cup_idx)
+
+
+## Registered cups, for the select list and the Confirm summary.
+## Typed to match _items_for's return type — an untyped Array fails the
+## assignment at runtime, which no parse check will catch.
+func _cup_names() -> Array[String]:
+	var out: Array[String] = []
+	for c in GameConfig.race.cups:
+		out.append(String(c.display_name))
+	if out.is_empty():
+		out.append("NO CUPS DEFINED")
+	return out
+
+
+func _cup_name(idx: int) -> String:
+	var cups: Array = GameConfig.race.cups
+	if idx >= 0 and idx < cups.size():
+		return String(cups[idx].display_name)
+	return "—"
 
 
 # === RENDER ===
@@ -285,7 +300,7 @@ func _items_for(id: String) -> Array[String]:
 		"difficulty":
 			return DIFF_NAMES.duplicate()
 		"cup":
-			return ["CIRCUIT CUP", "TOUR CUP"]
+			return _cup_names()
 		"type", "tt_type":
 			return ["CIRCUIT", "TOUR"]
 		"track":
@@ -315,7 +330,7 @@ func _subtitle_for(id: String) -> Array[String]:
 			lines.append("MODE:  %s" % ("TOURNAMENT" if p_mode == "TOURNAMENT" else "QUICK RACE"))
 			lines.append("PLAYERS:  %d" % int(ctx.get("players", 1)))
 			if p_mode == "TOURNAMENT":
-				lines.append("CUP:  %s" % String(ctx.get("cup", "")))
+				lines.append("CUP:  %s" % _cup_name(int(ctx.get("cup_idx", -1))))
 			else:
 				lines.append("TRACK:  %s" % String(main.level_names[int(ctx.get("track_idx", 0))]))
 				if bool(ctx.get("is_circuit", false)):

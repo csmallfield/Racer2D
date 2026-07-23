@@ -33,30 +33,26 @@ var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
 
 ## Grid the roster just ahead of the start line: the player begins last
 ## and races through the pack, Road Rash style.
-func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
+func spawn(main: Node2D, count: int, excluded: Array = [],
+		forced: Array = []) -> void:
 	rivals.clear()
 	leader_cp_times.clear()
 	for k in range(int(main.total_cps())):
 		leader_cp_times.append(-1.0)
-	# Roster indices still available after removing the players' picks, kept in
-	# ladder order (beatable -> fast). We field the first N of what remains —
-	# or the LAST N on Hard, which fields the top seeds instead.
+	# `forced` fields an exact roster index list — tournaments use it so the
+	# same cast contests every round and the standings mean something. When
+	# empty we derive the field as usual.
 	var diff: DifficultyProfile = GameConfig.difficulty
-	var available: Array = []
-	for idx in range(cfg.roster.size()):
-		if not excluded.has(idx):
-			available.append(idx)
-	if diff.field_top_of_ladder:
-		available.reverse()
-	var wanted := count
-	if diff.rival_count_cap > 0:
-		wanted = mini(wanted, diff.rival_count_cap)
-	var n := clampi(wanted, 0, available.size())
-	for i in range(n):
-		var profile: RivalProfile = cfg.roster[available[i]]
+	var chosen: Array = forced if not forced.is_empty() else field_for(count, excluded)
+	for i in range(chosen.size()):
+		var profile: RivalProfile = cfg.roster[int(chosen[i])]
 		SpriteCatalog.register_rival(i, profile)
 		var rival := {
 			"name": profile.display_name,
+			# Stable identity for championship standings — display text can
+			# change, the .tres stem can't.
+			"stem": SeriesState.racer_key(profile),
+			"roster_idx": int(chosen[i]),
 			"sprite": "rival_%d" % i,
 			"z": cfg.grid_gap * float(i + 1),
 			"offset": -0.45 if i % 2 == 0 else 0.45,
@@ -86,6 +82,25 @@ func spawn(main: Node2D, count: int, excluded: Array = []) -> void:
 		rivals.append(rival)
 		var seg: Dictionary = main.find_segment(float(rival.z))
 		seg.cars.append(rival)
+
+
+## Roster indices that would contest a race: ladder order (beatable -> fast),
+## minus the players' picks, capped and possibly reversed by difficulty.
+## Exposed so a tournament can fix its field once at cup start.
+static func field_for(count: int, excluded: Array = []) -> Array:
+	var cfg2: RaceSettings = GameConfig.race
+	var diff: DifficultyProfile = GameConfig.difficulty
+	var available: Array = []
+	for idx in range(cfg2.roster.size()):
+		if not excluded.has(idx):
+			available.append(idx)
+	if diff.field_top_of_ladder:
+		available.reverse()
+	var wanted := count
+	if diff.rival_count_cap > 0:
+		wanted = mini(wanted, diff.rival_count_cap)
+	var n := clampi(wanted, 0, available.size())
+	return available.slice(0, n)
 
 
 # === PER-FRAME UPDATE ===
@@ -260,6 +275,10 @@ func update(dt: float, main: Node2D) -> void:
 			var k: int = int(r.next_cp)
 			if leader_cp_times[k] < 0.0 or float(main.race_time) < leader_cp_times[k]:
 				leader_cp_times[k] = float(main.race_time)
+			# Same checkpoint boost the player gets — the award is symmetrical,
+			# so it lifts the whole field's floor rather than tilting the race.
+			r.boost = minf(float(r.boost) + cfg.checkpoint_boost_amount,
+					float(r.boost_cap))
 			r.next_cp = k + 1
 		if not bool(r.finished) and float(r.z) >= main.race_length():
 			r.finished = true

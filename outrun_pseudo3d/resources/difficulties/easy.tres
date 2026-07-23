@@ -16,6 +16,7 @@ lookahead_scale = 0.55
 apex_bias_scale = 0.6
 aggression_scale = 0.6
 time_limit_scale = 1.25
+checkpoint_time_cap = 3.0
 crash_speed_keep = 0.35
 centrifugal_scale = 0.5
 off_road_limit_scale = 1.6

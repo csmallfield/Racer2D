@@ -64,6 +64,14 @@ extends Resource
 @export_group("Tour")
 ## Scales the per-section time limit on tours.
 @export var time_limit_scale := 1.0
+## Ceiling on banked checkpoint time, as a multiple of one section's
+## allowance. Unbounded accumulation lets a quick driver amass a buffer that
+## compounds until the clock stops being a threat; this bounds the cushion
+## without removing the reward for being fast. Relative rather than absolute
+## because section length is derived per level — a flat seconds cap would be
+## lavish on a long tour and punishing on a short one. Never below 1.0, or
+## crossing a checkpoint could cost you time.
+@export_range(1.0, 4.0) var checkpoint_time_cap := 1.5
 
 
 @export_group("Player Assists")

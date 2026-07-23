@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CupDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/cup_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "SUNRISE CUP"
+tracks = ["level_01_coastal.gd", "level_02_desert.gd", "level_03_night.gd", "level_04_city.gd"]
+lap_override = 0
+points_table = Array[int]([])

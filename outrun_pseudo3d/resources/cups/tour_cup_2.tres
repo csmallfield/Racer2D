@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CupDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/cup_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "WILDLANDS CUP"
+tracks = ["level_05_jungle.gd", "level_06_mountains.gd", "level_07_halloween.gd", "level_08_candy.gd", "level_12_sunset_valley.gd"]
+lap_override = 0
+points_table = Array[int]([])

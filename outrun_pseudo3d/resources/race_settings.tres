@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="RaceSettings" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="RaceSettings" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/race_settings.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/rivals/grog.tres" id="2"]
@@ -10,10 +10,14 @@
 [ext_resource type="Resource" path="res://resources/rivals/diablo.tres" id="8"]
 [ext_resource type="Resource" path="res://resources/rivals/natasha.tres" id="9"]
 [ext_resource type="Resource" path="res://resources/rivals/viper.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/cups/circuit_cup.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/cups/tour_cup_1.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/cups/tour_cup_2.tres" id="13"]
 
 [resource]
 script = ExtResource("1")
 roster = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10")]
+cups = [ExtResource("11"), ExtResource("12"), ExtResource("13")]
 grid_gap = 500.0
 curve_slowdown = 0.028
 curve_slowdown_cap = 0.2
@@ -34,7 +38,8 @@ boost_curve_threshold = 1.0
 boost_attack_range = 10000.0
 final_sprint_fraction = 0.8
 pickup_boost_amount = 1.5
-pickup_respawn = 5.0
+pickup_respawn = 1.5
+checkpoint_boost_amount = 0.5
 auto_pickup_count = 4
 traffic_cluster_min = 2
 traffic_cluster_max = 5

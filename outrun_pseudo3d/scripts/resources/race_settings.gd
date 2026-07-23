@@ -6,6 +6,11 @@ extends Resource
 ## ahead). Levels' rival_count takes the first N of this list.
 @export var roster: Array[Resource] = []
 
+## Tournament cups, in menu order. Each is a CupDefinition; adding one is a
+## new .tres here, no code change. Registered explicitly rather than scanned
+## from disk, which is unreliable in exported builds.
+@export var cups: Array[Resource] = []
+
 @export_group("Grid")
 @export var grid_gap := 500.0           # world units between grid slots
 
@@ -44,7 +49,17 @@ extends Resource
 
 @export_group("Pickups")
 @export var pickup_boost_amount := 1.5  # seconds of boost per canister
-@export var pickup_respawn := 5.0      # seconds until a taken canister returns
+## Short by design. The whole field passes a given point in well under a
+## second, so a long respawn means the leader takes every canister and
+## anyone back in the pack never sees one — scarcity that rewards whoever
+## is already winning. Short enough that two or three cars can share one.
+@export var pickup_respawn := 1.5      # seconds until a taken canister returns
+## Boost granted for crossing a checkpoint, to every racer, in every mode.
+## Small: canisters stay the real prize. Because it is capped at the tank
+## size, a leader running full gains nothing while a straggler running empty
+## gains all of it — catch-up flavour with no rubber-banding and no position
+## lookup.
+@export var checkpoint_boost_amount := 0.5
 ## Random canisters scattered when a level defines none of its own.
 @export var auto_pickup_count := 4
 
