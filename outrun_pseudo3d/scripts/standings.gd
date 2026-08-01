@@ -49,10 +49,10 @@ func frame(_dt: float) -> void:
 # === RENDER ===
 
 func _build(cup_name: String, round_no: int, total: int) -> void:
-	var dim := ColorRect.new()
-	dim.size = Vector2(1920, 1080)
-	dim.color = Color(0.02, 0.02, 0.06, 0.85)
-	_add(dim)
+	# Scrim spans the whole frame; everything else is composed inside the
+	# centred 1920x1080 card (see DesignFrame).
+	_dynamic.append(DesignFrame.backdrop(self,
+			Color(0.02, 0.02, 0.06, 0.85)))
 
 	var title := _label(cup_name, 62, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(0, 60)
@@ -159,8 +159,13 @@ func _label(text: String, size: int, align: int) -> Label:
 	return l
 
 
+var _frame: DesignFrame
+
+
 func _add(n: Node) -> void:
-	add_child(n)
+	if _frame == null or not is_instance_valid(_frame):
+		_frame = DesignFrame.attach(self)
+	_frame.add_child(n)
 	_dynamic.append(n)
 
 

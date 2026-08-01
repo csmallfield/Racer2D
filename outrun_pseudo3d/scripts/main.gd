@@ -21,7 +21,15 @@ enum Mode { TOUR, CIRCUIT, TIME_TRIAL }
 
 ## Settings rows: {label, property (on the Settings autoload), type, step, min, max}
 const SETTINGS_ROWS: Array = [
-	{"label": "FULLSCREEN", "prop": "fullscreen", "type": "bool"},
+	{"label": "DISPLAY MODE", "prop": "window_mode", "type": "list",
+			"labels": ["FULLSCREEN", "EXCLUSIVE", "WINDOWED"]},
+	{"label": "  MONITOR", "prop": "monitor", "type": "monitor"},
+	{"label": "  WINDOW SIZE", "prop": "window_size_idx", "type": "reslist"},
+	{"label": "ASPECT", "prop": "aspect_mode", "type": "list",
+			"labels": ["AUTO (WIDE)", "PILLARBOX 16:9"]},
+	{"label": "RENDER SCALE", "prop": "render_scale", "type": "pct",
+			"step": 0.25, "min": 0.5, "max": 1.0},
+	{"label": "VSYNC", "prop": "vsync", "type": "bool"},
 	{"label": "MUSIC VOLUME", "prop": "music_volume", "type": "pct", "step": 0.1},
 	{"label": "SFX VOLUME", "prop": "sfx_volume", "type": "pct", "step": 0.1},
 	{"label": "RETRO FILTER", "prop": "crt_enabled", "type": "bool"},
@@ -99,6 +107,7 @@ var _bump_cd: Array[float] = []  # per-player contact-sound cooldown
 func _ready() -> void:
 	randomize()
 	_discover_levels()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	menu = MenuLayer.new()
 	_build_views(1)
 	add_child(menu)   # menu draws over every viewport
@@ -166,33 +175,67 @@ func player_z() -> float:
 ## renderer and HUD. 1P: full frame. 2P: stacked halves. 4P: quadrants.
 ## Draw distance shrinks with player count to keep four immediate-mode
 ## renderers inside the frame budget.
+## Split-screen rects for `count` players, in whatever the logical frame
+## currently is. Never hardcode 1920x1080 here: with the adaptive viewport an
+## ultrawide 1P frame is wider than that, and the rects have to follow or the
+## views cover only part of the window.
+func _view_rects(count: int) -> Array:
+	var base := get_viewport_rect().size
+	match count:
+		1: return [Rect2(Vector2.ZERO, base)]
+		2: return [Rect2(0, 0, base.x, base.y / 2),
+				Rect2(0, base.y / 2, base.x, base.y / 2)]
+		3: return [Rect2(0, 0, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
+				Rect2(0, base.y / 2, base.x, base.y / 2)]
+		_: return [Rect2(0, 0, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
+				Rect2(0, base.y / 2, base.x / 2, base.y / 2),
+				Rect2(base.x / 2, base.y / 2, base.x / 2, base.y / 2)]
+
+
+## Per-view draw distance by view size: full frame 100%, wide halves 66%,
+## quadrants 45% (3P mixes both). Keyed off the frame width, not a constant,
+## so it stays correct on any aspect.
+func _draw_distance_for(rect: Rect2, count: int) -> int:
+	var dd_base: int = GameConfig.camera.draw_distance
+	if count <= 1:
+		return dd_base
+	return int(dd_base * (0.66 if rect.size.x >= get_viewport_rect().size.x else 0.45))
+
+
+## Resize the existing views in place after a window / logical-frame change.
+## Deliberately not a rebuild: rebuilding would drop the stage name, lap
+## counter, progress bar and results board that are set once per race.
+func _relayout_views() -> void:
+	if views.is_empty():
+		return
+	var rects := _view_rects(views.size())
+	for i in range(views.size()):
+		views[i].container.position = rects[i].position
+		views[i].container.size = rects[i].size
+		# Do NOT touch views[i].viewport.size here: the container has stretch
+		# enabled and owns the SubViewport's size. Writing it directly is
+		# refused with a warning and the two get out of step.
+		views[i].renderer.draw_distance = _draw_distance_for(rects[i], views.size())
+		views[i].hud.relayout()
+
+
+func _on_viewport_resized() -> void:
+	# Deferred: a window resize can raise this twice, once for the OS size and
+	# again when Settings re-derives content_scale_size from it.
+	_relayout_views.call_deferred()
+
+
 func _build_views(count: int) -> void:
 	player_count = count
 	for v in views:
 		v.container.queue_free()
 	views.clear()
 
-	var base := Vector2(1920, 1080)
-	var rects: Array = []
-	match count:
-		1: rects = [Rect2(Vector2.ZERO, base)]
-		2: rects = [Rect2(0, 0, base.x, base.y / 2),
-				Rect2(0, base.y / 2, base.x, base.y / 2)]
-		3: rects = [Rect2(0, 0, base.x / 2, base.y / 2),
-				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
-				Rect2(0, base.y / 2, base.x, base.y / 2)]
-		_: rects = [Rect2(0, 0, base.x / 2, base.y / 2),
-				Rect2(base.x / 2, 0, base.x / 2, base.y / 2),
-				Rect2(0, base.y / 2, base.x / 2, base.y / 2),
-				Rect2(base.x / 2, base.y / 2, base.x / 2, base.y / 2)]
-
-	var dd_base: int = GameConfig.camera.draw_distance
+	var rects := _view_rects(count)
 	for i in range(count):
-		# Per-view draw distance by view size: full frame 100%, wide halves
-		# 66%, quadrants 45% (3P mixes both).
-		var dd := dd_base
-		if count > 1:
-			dd = int(dd_base * (0.66 if rects[i].size.x >= base.x else 0.45))
+		var dd := _draw_distance_for(rects[i], count)
 		var container := SubViewportContainer.new()
 		container.stretch = true
 		container.position = rects[i].position
@@ -845,6 +888,19 @@ func _adjust_setting(row: Dictionary, dir: int) -> void:
 			var lo: float = float(row.get("min", 0.0))
 			var hi: float = float(row.get("max", 1.0))
 			Settings.set(prop, clampf(v, lo, hi))
+		"list":
+			var labels: Array = row.labels
+			Settings.set(prop, wrapi(int(Settings.get(prop)) + dir, 0, labels.size()))
+		"monitor":
+			# -1 (AUTO) sits below screen 0, so the cycle spans n + 1 values.
+			var n := maxi(DisplayServer.get_screen_count(), 1)
+			Settings.set(prop, wrapi(int(Settings.get(prop)) + 1 + dir, 0, n + 1) - 1)
+		"reslist":
+			if Settings.window_mode != DisplayConfig.MODE_WINDOWED:
+				return
+			var n := Settings.preset_count()
+			if n > 0:
+				Settings.set(prop, clampi(int(Settings.get(prop)) + dir, 0, n - 1))
 
 
 func _show_settings() -> void:
@@ -856,10 +912,35 @@ func _show_settings() -> void:
 				val = "ON" if bool(Settings.get(row.prop)) else "OFF"
 			"pct":
 				val = "%d%%" % int(round(float(Settings.get(row.prop)) * 100.0))
+			"list":
+				var labels: Array = row.labels
+				var i: int = clampi(int(Settings.get(row.prop)), 0, labels.size() - 1)
+				val = String(labels[i])
+			"monitor":
+				var m := int(Settings.get(row.prop))
+				var n := maxi(DisplayServer.get_screen_count(), 1)
+				val = "AUTO" if m < 0 else "%d / %d" % [m + 1, n]
+			"reslist":
+				if Settings.window_mode != DisplayConfig.MODE_WINDOWED:
+					val = "\u2014"
+				else:
+					var wsize := Settings.current_preset()
+					val = "%d x %d" % [wsize.x, wsize.y]
 			_:
 				val = "%.2f" % float(Settings.get(row.prop))
 		rows.append("%s   %s" % [row.label, val])
 	menu.show_list("SETTINGS", rows, menu_sel)
+	_note_frame()
+
+
+## Footnote on the settings screen: what the chosen options actually resolve
+## to. The logical frame is the number that matters — it is what the road
+## renderer and every layout scale against — and it is not obvious from the
+## rows above on a non-16:9 display.
+func _note_frame() -> void:
+	var vp := get_viewport_rect().size
+	menu.set_footnote("frame %d x %d  \u2022  window %d x %d"
+			% [int(vp.x), int(vp.y), get_window().size.x, get_window().size.y])
 
 
 ## Levels belonging to the current in-race mode: circuits for CIRCUIT, tours

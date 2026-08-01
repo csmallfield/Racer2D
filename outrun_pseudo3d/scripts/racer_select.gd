@@ -180,10 +180,10 @@ func _set_pips(key: String, value: int) -> void:
 # === CONSTRUCTION ===
 
 func _build_static() -> void:
-	var dim := ColorRect.new()
-	dim.size = Vector2(1920, 1080)
-	dim.color = Color(0.02, 0.02, 0.06, 0.74)
-	_add(dim)
+	# Scrim spans the whole frame; everything else is composed inside the
+	# centred 1920x1080 card (see DesignFrame).
+	_dynamic.append(DesignFrame.backdrop(self,
+			Color(0.02, 0.02, 0.06, 0.74)))
 
 	_title = _label("", 62, HORIZONTAL_ALIGNMENT_CENTER)
 	_title.position = Vector2(0, 70)
@@ -323,8 +323,13 @@ func _label(text: String, size: int, align: int) -> Label:
 	return l
 
 
+var _frame: DesignFrame
+
+
 func _add(n: Node) -> void:
-	add_child(n)
+	if _frame == null or not is_instance_valid(_frame):
+		_frame = DesignFrame.attach(self)
+	_frame.add_child(n)
 	_dynamic.append(n)
 
 

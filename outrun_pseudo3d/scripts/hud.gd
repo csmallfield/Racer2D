@@ -2,8 +2,13 @@ class_name HudLayer
 extends CanvasLayer
 ## Simple arcade HUD: speed (bottom-left), timer (top-center),
 ## stage name (top-left), big center message, control hints (bottom).
-## Positions assume the 1920x1080 logical resolution set in project.godot
-## (canvas_items stretch keeps this stable at any window size).
+##
+## Elements are authored in 1920x1080 design units but placed as insets from
+## the edges of the ACTUAL viewport, at one uniform scale. That matters twice
+## over: split-screen views are halves and quadrants, and with the adaptive
+## logical viewport a 1P frame on an ultrawide is wider than 16:9. Scaling the
+## two axes independently (as this used to) stretched the type; positioning
+## from the top-left alone left the corner readouts stranded mid-screen.
 
 var speed_label: Label
 var time_label: Label
@@ -17,63 +22,111 @@ var race_time_label: Label
 var board_bg: ColorRect
 var board_label: RichTextLabel
 var _flash_t := 0.0
-# Layout scale vs the 1920x1080 design (split-screen viewports are smaller).
-var _kx := 1.0
-var _ky := 1.0
 var track_bar: TrackBar
 var boost_bar: BoostBar
 
+const DESIGN := Vector2(1920.0, 1080.0)
+const H_LEFT := 0
+const H_CENTER := 1
+const H_RIGHT := 2
+const V_TOP := 0
+const V_BOTTOM := 1
+
+## One uniform scale (never separate x/y), vs the 1920x1080 design.
+var _k := 1.0
+## Layout table: [{node, h, v, inset, size, font, keys}] — replayed by
+## _place_all() on build and on every viewport resize.
+var _items: Array = []
+
 
 func _ready() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	_kx = vp.x / 1920.0
-	_ky = vp.y / 1080.0
-	stage_label = _make_label(Vector2(36, 24), Vector2(900, 60), 39,
-			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
-	time_label = _make_label(Vector2(0, 21), Vector2(1920, 90), 66,
-			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
-	speed_label = _make_label(Vector2(36, 975), Vector2(600, 75), 54,
-			HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
-	message_label = _make_label(Vector2(0, 420), Vector2(1920, 150), 84,
-			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
-	lap_label = _make_label(Vector2(1284, 906), Vector2(600, 60), 40,
-			HORIZONTAL_ALIGNMENT_RIGHT, Color(0.9, 0.9, 0.95))
-	position_label = _make_label(Vector2(1284, 966), Vector2(600, 84), 60,
-			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
-	flash_label = _make_label(Vector2(0, 570), Vector2(1920, 60), 39,
-			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
-	race_time_label = _make_label(Vector2(0, 108), Vector2(1920, 45), 30,
-			HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
+	stage_label = _make_label(H_LEFT, V_TOP, Vector2(36, 24), Vector2(900, 60),
+			39, HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
+	time_label = _make_label(H_CENTER, V_TOP, Vector2(0, 21), Vector2(1920, 90),
+			66, HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
+	speed_label = _make_label(H_LEFT, V_BOTTOM, Vector2(36, 30), Vector2(600, 75),
+			54, HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1))
+	message_label = _make_label(H_CENTER, V_TOP, Vector2(0, 420), Vector2(1920, 150),
+			84, HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1))
+	lap_label = _make_label(H_RIGHT, V_BOTTOM, Vector2(36, 114), Vector2(600, 60),
+			40, HORIZONTAL_ALIGNMENT_RIGHT, Color(0.9, 0.9, 0.95))
+	position_label = _make_label(H_RIGHT, V_BOTTOM, Vector2(36, 30), Vector2(600, 84),
+			60, HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 0.9, 0.3))
+	flash_label = _make_label(H_CENTER, V_TOP, Vector2(0, 570), Vector2(1920, 60),
+			39, HORIZONTAL_ALIGNMENT_CENTER, Color(1, 0.9, 0.3))
+	race_time_label = _make_label(H_CENTER, V_TOP, Vector2(0, 108), Vector2(1920, 45),
+			30, HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1, 0.85))
 	boost_bar = BoostBar.new()
-	boost_bar.position = Vector2(36 * _kx, 940 * _ky)
-	boost_bar.size = Vector2(300 * _kx, 21 * _ky)
 	boost_bar.visible = false
 	add_child(boost_bar)
+	_track(boost_bar, H_LEFT, V_BOTTOM, Vector2(36, 119), Vector2(300, 21))
 	track_bar = TrackBar.new()
-	track_bar.position = Vector2(360 * _kx, 993 * _ky)
-	track_bar.size = Vector2(1200 * _kx, 18 * _ky)
-	track_bar.k = _ky
 	track_bar.visible = false
 	add_child(track_bar)
+	_track(track_bar, H_CENTER, V_BOTTOM, Vector2(0, 69), Vector2(1200, 18))
 	_make_leaderboard()
-	hint_label = _make_label(Vector2(0, 1029), Vector2(1908, 45), 24,
-			HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
-	hint_label.text = "P1 WASD+Shift / pad1  •  P2 Arrows+Ctrl / pad2  •  R restart  •  P pause  •  Esc menu"
+	hint_label = _make_label(H_RIGHT, V_BOTTOM, Vector2(12, 6), Vector2(1908, 45),
+			24, HORIZONTAL_ALIGNMENT_RIGHT, Color(1, 1, 1, 0.7))
+	hint_label.text = "P1 WASD+Shift / pad1  \u2022  P2 Arrows+Ctrl / pad2  \u2022  R restart  \u2022  P pause  \u2022  Esc menu"
+	_place_all()
 
 
-## Positions/sizes are authored in 1920x1080 design coordinates and scaled
-## to the actual viewport (split-screen views are halves or quadrants).
-func _make_label(pos: Vector2, size: Vector2, font_size: int,
+## Re-run the layout against the current viewport. main.gd calls this when the
+## window or logical frame changes, instead of rebuilding the views — a rebuild
+## would blank the stage name, lap counter and progress bar mid-race.
+func relayout() -> void:
+	_place_all()
+
+
+func _track(node: Control, h: int, v: int, inset: Vector2, size: Vector2,
+		font: int = 0, keys: Array = []) -> void:
+	_items.append({"node": node, "h": h, "v": v, "inset": inset,
+			"size": size, "font": font, "keys": keys})
+
+
+func _place_all() -> void:
+	if not is_inside_tree():
+		return
+	var vp := get_viewport().get_visible_rect().size
+	_k = minf(vp.x / DESIGN.x, vp.y / DESIGN.y)
+	for it in _items:
+		var node: Control = it.node
+		var w: float = float(it.size.x) * _k
+		var h: float = float(it.size.y) * _k
+		var inset: Vector2 = it.inset
+		var x := inset.x * _k
+		match int(it.h):
+			H_CENTER:
+				x = (vp.x - w) * 0.5 + inset.x * _k
+			H_RIGHT:
+				x = vp.x - w - inset.x * _k
+		var y := inset.y * _k
+		if int(it.v) == V_BOTTOM:
+			y = vp.y - h - inset.y * _k
+		node.position = Vector2(x, y)
+		node.size = Vector2(w, h)
+		var font: int = int(it.font)
+		if font > 0:
+			for key in it.keys:
+				node.add_theme_font_size_override(String(key),
+						maxi(10, int(float(font) * _k)))
+			if node is Label:
+				node.add_theme_constant_override("outline_size",
+						maxi(4, int(12.0 * _k)))
+	track_bar.k = _k
+	track_bar.queue_redraw()
+	boost_bar.queue_redraw()
+
+
+## Positions are insets from the named edges, in 1920x1080 design units.
+func _make_label(h: int, v: int, inset: Vector2, size: Vector2, font_size: int,
 		align: HorizontalAlignment, color: Color) -> Label:
 	var l := Label.new()
-	l.position = Vector2(pos.x * _kx, pos.y * _ky)
-	l.size = Vector2(size.x * _kx, size.y * _ky)
 	l.horizontal_alignment = align
-	l.add_theme_font_size_override("font_size", maxi(10, int(font_size * _ky)))
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.add_theme_constant_override("outline_size", maxi(4, int(12 * _ky)))
 	add_child(l)
+	_track(l, h, v, inset, size, font_size, ["font_size"])
 	return l
 
 
@@ -137,22 +190,21 @@ static func ordinal(n: int) -> String:
 	return "%d%s" % [n, suffix]
 
 
+## The results board is a centred card, so both parts anchor to the frame
+## centre rather than to design-space x offsets.
 func _make_leaderboard() -> void:
 	board_bg = ColorRect.new()
-	board_bg.position = Vector2(585 * _kx, 180 * _ky)
-	board_bg.size = Vector2(750 * _kx, 720 * _ky)
 	board_bg.color = Color(0.02, 0.02, 0.06, 0.82)
 	board_bg.visible = false
 	add_child(board_bg)
+	_track(board_bg, H_CENTER, V_TOP, Vector2(0, 180), Vector2(750, 720))
 	board_label = RichTextLabel.new()
-	board_label.position = Vector2(615 * _kx, 204 * _ky)
-	board_label.size = Vector2(690 * _kx, 678 * _ky)
 	board_label.bbcode_enabled = true
 	board_label.scroll_active = false
-	board_label.add_theme_font_size_override("normal_font_size", maxi(12, int(36 * _ky)))
-	board_label.add_theme_font_size_override("bold_font_size", maxi(12, int(36 * _ky)))
 	board_label.visible = false
 	add_child(board_label)
+	_track(board_label, H_CENTER, V_TOP, Vector2(0, 204), Vector2(690, 678),
+			36, ["normal_font_size", "bold_font_size"])
 
 
 ## entries: sorted array of {name, time, is_player}; the player row is

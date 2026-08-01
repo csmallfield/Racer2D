@@ -56,7 +56,11 @@ func shake() -> void:
 
 
 func _draw() -> void:
-	if main == null or main.track == null or main.track.segments.is_empty():
+	# `player` is null for a beat between _build_views() and the player
+	# assignment in _load_level(). Nothing drew in that gap before, but the
+	# deferred relayout path means a frame can now land there.
+	if (main == null or player == null or main.track == null
+			or main.track.segments.is_empty()):
 		return
 	var vp := get_viewport_rect().size
 	_ref_w = minf(vp.x, vp.y * 16.0 / 9.0)

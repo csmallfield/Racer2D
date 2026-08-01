@@ -10,6 +10,9 @@ const TITLE := "SKYLINE RUSH"   # working title — rename at will
 var _dim: ColorRect
 var _title_label: Label
 var _content: RichTextLabel
+var _footnote: Label
+## Menus stay a centred 16:9 card on wide frames; see DesignFrame.
+var _frame: DesignFrame
 
 const LIST_HEIGHT := 660.0   # content box height; rows adapt to fit
 
@@ -27,10 +30,9 @@ func _fit_list(n: int, spaced: bool) -> String:
 
 
 func _ready() -> void:
-	_dim = ColorRect.new()
-	_dim.size = Vector2(1920, 1080)
-	_dim.color = Color(0.02, 0.02, 0.06, 0.66)
-	add_child(_dim)
+	# The scrim covers the whole picture; the composition sits in the frame.
+	_dim = DesignFrame.backdrop(self, Color(0.02, 0.02, 0.06, 0.66))
+	_frame = DesignFrame.attach(self)
 
 	_title_label = Label.new()
 	_title_label.position = Vector2(0, 135)
@@ -39,7 +41,7 @@ func _ready() -> void:
 	_title_label.add_theme_font_size_override("font_size", 108)
 	_title_label.add_theme_color_override("font_color", Color(1, 0.9, 0.3))
 	_title_label.text = TITLE
-	add_child(_title_label)
+	_frame.add_child(_title_label)
 
 	_content = RichTextLabel.new()
 	_content.position = Vector2(360, 345)
@@ -48,7 +50,23 @@ func _ready() -> void:
 	_content.scroll_active = false
 	_content.add_theme_font_size_override("normal_font_size", 45)
 	_content.add_theme_font_size_override("bold_font_size", 45)
-	add_child(_content)
+	_frame.add_child(_content)
+
+	# Read-only status line (used by the settings screen to report the frame
+	# the current display options actually resolve to).
+	_footnote = Label.new()
+	_footnote.position = Vector2(0, 1018)
+	_footnote.size = Vector2(1920, 40)
+	_footnote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_footnote.add_theme_font_size_override("font_size", 26)
+	_footnote.add_theme_color_override("font_color", Color(0.55, 0.55, 0.62))
+	_frame.add_child(_footnote)
+
+
+## One line of status under the list. Cleared by every show_* call, so it only
+## survives when the caller sets it straight afterwards.
+func set_footnote(text: String) -> void:
+	_footnote.text = text
 
 
 func hide_menu() -> void:
@@ -63,6 +81,7 @@ func show_main(items: Array[String], sel: int) -> void:
 ## Generic selectable list under an arbitrary title.
 func show_list(title: String, items: Array[String], sel: int) -> void:
 	visible = true
+	_footnote.text = ""
 	_title_label.text = title
 	var gap := _fit_list(items.size(), true)
 	var rows := "\n[center]"
@@ -76,6 +95,7 @@ func show_list(title: String, items: Array[String], sel: int) -> void:
 ## Used for the Confirm summary, Credits, and the Racer Select placeholder.
 func show_config(title: String, subtitle: Array, items: Array[String], sel: int) -> void:
 	visible = true
+	_footnote.text = ""
 	_title_label.text = title
 	var gap := _fit_list(items.size() + subtitle.size() + 1, false)
 	var rows := "\n[center]"
@@ -92,6 +112,7 @@ func show_config(title: String, subtitle: Array, items: Array[String], sel: int)
 ## Stage picker: left/right cycles, shown with the chosen mode as context.
 func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 	visible = true
+	_footnote.text = ""
 	_title_label.text = mode_name
 	var gap := _fit_list(stage_names.size() + 2, false)
 	var rows := "\n[center][color=#aaaaaa]SELECT STAGE[/color]" + gap
@@ -108,6 +129,7 @@ func show_levels(stage_names: Array, sel: int, mode_name: String) -> void:
 func show_board(stage_name: String, filter_name: String, metric: String,
 		entries: Array, racer_names: Dictionary) -> void:
 	visible = true
+	_footnote.text = ""
 	_title_label.text = "BEST TIMES"
 	var rows := "[center][b]%s[/b]\n" % stage_name
 	rows += "[color=#ffd24d]%s  —  %s[/color]\n" % [filter_name, metric]

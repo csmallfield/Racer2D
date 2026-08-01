@@ -14,9 +14,17 @@ uniform float noise_strength : hint_range(0.0, 0.3) = 0.05;  // animated VHS gra
 uniform float flicker : hint_range(0.0, 0.1) = 0.01;         // luminance wobble
 
 
-vec2 curve(vec2 uv, float amt) {
+// Barrel distortion. UV space is not square, so distorting in it directly
+// turns the CRT bulge into a horizontal stretch on anything wider than the
+// screen is tall — very visible at 21:9 and 32:9. Measure the radius in
+// aspect-corrected space and normalise it, so the amount of bulge at the
+// corners is the same whatever the frame shape.
+vec2 curve(vec2 uv, float amt, float aspect) {
 	vec2 c = uv * 2.0 - 1.0;
-	c += c * dot(c, c) * amt;
+	vec2 a = vec2(aspect, 1.0);
+	vec2 p = c * a;
+	float r2 = dot(p, p) / dot(a, a);
+	c += c * r2 * amt;
 	return c * 0.5 + 0.5;
 }
 
@@ -27,11 +35,12 @@ float hash(vec2 p) {
 
 
 void fragment() {
-	vec2 uv = curve(SCREEN_UV, curvature);
+	vec2 tex = vec2(textureSize(screen_tex, 0));
+	vec2 uv = curve(SCREEN_UV, curvature, tex.x / max(tex.y, 1.0));
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
 		COLOR = vec4(0.0, 0.0, 0.0, 1.0);
 	} else {
-		vec2 px = 1.0 / vec2(textureSize(screen_tex, 0));
+		vec2 px = 1.0 / tex;
 
 		// Chromatic fringe: red and blue sampled slightly apart.
 		float r = texture(screen_tex, uv + vec2(px.x * aberration, 0.0)).r;
