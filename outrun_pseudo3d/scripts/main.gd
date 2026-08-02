@@ -356,7 +356,7 @@ func _load_level(idx: int) -> void:
 		_bump_cd.append(0.0)
 		mirrors.append({"z": 0.0, "offset": p.x, "speed": 0.0,
 				"sprite": "player_%d" % i, "y": 0.0, "vy": 0.0, "air": 0.0,
-				"pidx": i})
+				"pidx": i, "tiebreak": i})
 	_spawn_traffic()
 	for i in range(player_count):
 		_sync_mirror(i, true)
@@ -526,6 +526,8 @@ func _place_traffic_car(z: float, offset: float, pace: float, sprites: Array) ->
 		"speed": GameConfig.player.max_speed * pace,
 		"sprite": sprites.pick_random(),
 		"y": ground_y(z), "vy": 0.0, "air": 0.0,
+		# Stable parity used to break dead-level dodge ties (see _dodge_dir).
+		"tiebreak": cars.size(),
 	}
 	cars.append(car)
 	find_segment(z).cars.append(car)
@@ -1047,8 +1049,8 @@ func _run_frame(dt: float) -> void:
 		var crossed := p.update(dt, self)
 		_sync_mirror(i)
 		_check_player_checkpoint(i, prev_z)
-		_per_player_effects(i, dt)
-		_check_collisions(i)
+		_per_player_effects(i, dt, prev_z)
+		_check_collisions(i, prev_z, dt)
 		_player_shunts(i, dt)
 		if crossed:
 			# Close the lap first: the crossing that ends the race is this
@@ -1105,7 +1107,7 @@ func _run_frame(dt: float) -> void:
 		_end_race()
 
 
-func _per_player_effects(i: int, dt: float) -> void:
+func _per_player_effects(i: int, dt: float, prev_z: float) -> void:
 	var p := players[i]
 	var v: Dictionary = views[i]
 	if p.slip > 0.9:
@@ -1118,16 +1120,34 @@ func _per_player_effects(i: int, dt: float) -> void:
 	if _prev_air[i] > 200.0 and p.air <= 0.5:
 		Audio.play("land", -6.0)
 	_prev_air[i] = p.air
-	# Boost canisters at this player's car.
-	var pseg := find_segment(p.position_z + player_z())
-	for pu in pseg.pickups:
-		if not bool(pu.taken) and p.air < 120.0 \
-				and absf(float(pu.offset) - p.x) < 0.4:
-			pu.taken = true
-			pu.respawn_t = GameConfig.race.pickup_respawn
-			p.boost = minf(p.boost + GameConfig.race.pickup_boost_amount,
-					GameConfig.player.boost_capacity)
-			Audio.play("pickup", -2.0)
+	# Boost canisters: swept against the whole interval travelled this frame.
+	# A canister is a point in z, and at boost speed the car covers 1.24
+	# segments per frame — sampling only the segment you happen to be in at
+	# the end of the frame is how they get driven straight through, and it
+	# failed most often while boosting, which is exactly when you are farming
+	# them.
+	if p.air < 120.0:
+		var track_len2 := track.track_length()
+		var to_z2 := p.position_z + player_z()
+		var travel2 := fposmod(p.position_z - prev_z, track_len2)
+		if travel2 > track_len2 * 0.5:
+			travel2 = 0.0
+		var plen: float = Contact.length_of("player")
+		for pseg in _segment_span(to_z2 - travel2, to_z2, Contact.PICKUP_LENGTH):
+			for pu in pseg.pickups:
+				if bool(pu.taken):
+					continue
+				if absf(float(pu.offset) - p.x) >= Contact.PICKUP_LATERAL:
+					continue
+				if not Contact.hit_span(to_z2 - travel2, to_z2, plen,
+						float(pu.z), float(pu.z),
+						Contact.PICKUP_LENGTH, track_len2):
+					continue
+				pu.taken = true
+				pu.respawn_t = GameConfig.race.pickup_respawn
+				p.boost = minf(p.boost + GameConfig.race.pickup_boost_amount,
+						GameConfig.player.boost_capacity)
+				Audio.play("pickup", -2.0)
 
 
 func _update_pickup_respawns(dt: float) -> void:
@@ -1420,7 +1440,8 @@ func _update_traffic(dt: float) -> void:
 	for car in cars:
 		var old_seg := find_segment(car.z)
 		car.offset = clampf(
-				float(car.offset) + _car_steer(car, old_seg) * dt * 60.0,
+				float(car.offset)
+						+ _car_steer(car, old_seg) * GameConfig.race.traffic_dodge_rate * dt,
 				-1.2, 1.2)
 		var g_prev := ground_y(float(car.z))
 		car.z = fposmod(car.z + car.speed * dt, track_len)
@@ -1447,33 +1468,58 @@ func _car_steer(car: Dictionary, car_seg: Dictionary,
 	if not near_any:
 		return 0.0
 
-	var car_w: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
+	var cfg: RaceSettings = GameConfig.race
+	var car_w: float = Contact.width_of(car.sprite)
 	var car_x: float = float(car.offset)
 	for i in range(1, lookahead):
 		var seg: Dictionary = track.segments[(int(car_seg.index) + i) % seg_count]
 		for other in seg.cars:
 			if other == car:
 				continue
-			var other_w: float = SpriteCatalog.get_def(other.sprite).world_w \
-					/ RoadRenderer.ROAD_WIDTH
+			# Gate on TIME TO CONTACT, not on "am I faster than that car".
+			# The old test fired on any speed advantage anywhere in the 40
+			# segment scan, and with form variance every rival is a hair
+			# faster than somebody at all times — so on the grid, where the
+			# pack is 2.5 segments apart and closing speeds are noise, every
+			# car held a permanent dodge signal.
+			var closing: float = float(car.speed) - float(other.speed)
+			if closing <= 1.0:
+				continue
+			var ttc: float = float(i) * TrackBuilder.SEGMENT_LENGTH / closing
+			if ttc > cfg.dodge_ttc:
+				continue
 			var other_x: float = float(other.offset)
-			if car.speed > other.speed \
-					and _overlap(car_x, car_w, other_x, other_w, 1.2):
-				var dir := 0.0
-				if other_x > 0.5:
-					dir = -1.0
-				elif other_x < -0.5:
-					dir = 1.0
-				else:
-					dir = 1.0 if car_x > other_x else -1.0
-				return dir / float(i) * float(car.speed - other.speed) \
-						/ GameConfig.player.max_speed
+			if not Contact.lateral(car_x, car_w, other_x,
+					Contact.width_of(other.sprite), Contact.M_STEER):
+				continue
+			# Urgency in 0..1: 1 = contact imminent. Both callers scale their
+			# lateral rate by this, so a distant threat gets a nudge and a
+			# close one gets a full swerve.
+			return _dodge_dir(car, car_x, other_x) \
+					* clampf(1.0 - ttc / cfg.dodge_ttc, 0.0, 1.0)
 
 	if float(car.offset) < -0.9:
 		return 0.1
 	if float(car.offset) > 0.9:
 		return -0.1
 	return 0.0
+
+
+## Which way to go around `other`. Near a road edge the choice is forced;
+## otherwise pass on the side you are already leaning.
+static func _dodge_dir(car: Dictionary, car_x: float, other_x: float) -> float:
+	if other_x > 0.5:
+		return -1.0
+	if other_x < -0.5:
+		return 1.0
+	if absf(car_x - other_x) > 0.02:
+		return 1.0 if car_x > other_x else -1.0
+	# Dead level. The old tiebreak compared positions, so two cars at the
+	# SAME offset — which is precisely what the starting grid produces, whole
+	# columns sharing an offset — both resolved to the same side, never
+	# separated, and held the signal until the commitment flipped them the
+	# other way. Break it on a stable per-car trait so pairs split instead.
+	return 1.0 if int(car.get("tiebreak", 0)) % 2 == 0 else -1.0
 
 
 ## Contact FROM others — the missing half of collisions. Rear shunts: a
@@ -1489,8 +1535,10 @@ func _player_shunts(i: int, dt: float) -> void:
 	var track_len := track.track_length()
 	var pw: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
 	var pz := fposmod(p.position_z + player_z(), track_len)
-	for off in [-1, 0, 1]:
-		var seg := find_segment(pz + float(off) * TrackBuilder.SEGMENT_LENGTH)
+	# The dz windows below are the tuned feel and are left alone. What changes
+	# is the SCAN: a fixed -1/0/+1 segment sweep is only wide enough at low
+	# speed, so the reach is derived from the windows themselves.
+	for seg in _segment_span(pz - 600.0, pz + 260.0, Contact.CAR_LENGTH):
 		for car in seg.cars:
 			if int(car.get("pidx", -1)) == i:
 				continue
@@ -1498,7 +1546,7 @@ func _player_shunts(i: int, dt: float) -> void:
 					- track_len * 0.5
 			var cw: float = SpriteCatalog.get_def(car.sprite).world_w \
 					/ RoadRenderer.ROAD_WIDTH
-			if not _overlap(p.x, pw, float(car.offset), cw, 0.9):
+			if not Contact.lateral(p.x, pw, float(car.offset), cw, Contact.M_SIDE):
 				continue
 			if dz < -60.0 and dz > -600.0 and float(car.speed) > p.speed * 1.02:
 				# Rear shunt: they hit you.
@@ -1528,44 +1576,96 @@ func _player_shunts(i: int, dt: float) -> void:
 					_bump_cd[i] = 0.35
 
 
-func _check_collisions(i: int) -> void:
+## Every segment the span [z0, z1] touches, padded either side. Collision and
+## pickup scans use this instead of a single find_segment(): at racing speed a
+## car crosses a whole segment per frame, so "the segment I am in right now"
+## silently skips whatever was in the one before it.
+func _segment_span(z0: float, z1: float, pad: float) -> Array:
+	var seg_count := track.segments.size()
+	var track_len := track.track_length()
+	var lo := minf(z0, z1) - pad
+	var reach := absf(z1 - z0) + pad * 2.0
+	var span := mini(int(ceil(reach / TrackBuilder.SEGMENT_LENGTH)) + 1, 12)
+	var first := int(floor(fposmod(lo, track_len) / TrackBuilder.SEGMENT_LENGTH))
+	var out: Array = []
+	for k in range(span):
+		out.append(track.segments[(first + k) % seg_count])
+	return out
+
+
+## Hard contact for one player over the frame it just travelled. `prev_z` is
+## the position before the update, so the whole swept interval is tested
+## rather than the end point alone.
+func _check_collisions(i: int, prev_z: float, dt: float) -> void:
 	var p := players[i]
 	if p.air > 250.0:
 		return
-	var seg := find_segment(p.position_z + player_z())
-	var player_w: float = SpriteCatalog.get_def("player").world_w / RoadRenderer.ROAD_WIDTH
+	var track_len := track.track_length()
+	var to_z := p.position_z + player_z()
+	var travel := fposmod(p.position_z - prev_z, track_len)
+	if travel > track_len * 0.5:
+		travel = 0.0   # wrapped backwards (a shunt pushback), not real travel
+	var from_z := to_z - travel
+	var player_w: float = Contact.width_of("player")
+	var player_l: float = Contact.length_of("player")
+	var pad: float = Contact.CAR_LENGTH
 
 	if absf(p.x) > 0.8:
-		for spr in seg.sprites:
-			var def: Dictionary = SpriteCatalog.get_def(spr.name)
-			if not def.collidable:
-				continue
-			var sw: float = def.world_w / RoadRenderer.ROAD_WIDTH
-			if _overlap(p.x, player_w, spr.offset, sw):
+		for seg in _segment_span(from_z, to_z, pad):
+			var crashed := false
+			for spr in seg.sprites:
+				var def: Dictionary = SpriteCatalog.get_def(spr.name)
+				if not def.collidable:
+					continue
+				if not Contact.lateral(p.x, player_w, spr.offset,
+						def.world_w / RoadRenderer.ROAD_WIDTH, Contact.M_SCENERY):
+					continue
+				# Scenery is static, so its travel is zero.
+				if not Contact.hit_span(from_z, to_z, player_l,
+						float(spr.z), float(spr.z),
+						Contact.length_of(spr.name), track_len):
+					continue
 				p.speed = GameConfig.player.max_speed \
 						* GameConfig.difficulty.crash_speed_keep
 				Audio.play("crash", 0.0, 1.0, 0.5)
+				crashed = true
+				break
+			if crashed:
 				break
 
 	# Rear-ending anything slower — traffic, rivals, or another player's
 	# mirror — slams your speed and pushes you back behind it.
-	for car in seg.cars:
-		if int(car.get("pidx", -1)) == i:
-			continue   # your own mirror
-		if p.speed <= car.speed:
-			continue
-		var cw: float = SpriteCatalog.get_def(car.sprite).world_w / RoadRenderer.ROAD_WIDTH
-		if _overlap(p.x, player_w, car.offset, cw, 0.8):
-			p.speed = car.speed * (car.speed / maxf(p.speed, 1.0))
-			p.position_z = fposmod(car.z - player_z(), track.track_length())
-			Audio.play("bump", 0.0, 1.0, 0.3)
-			break
+	# NOTE: cars have not moved yet this frame (players update first), so
+	# car.z is their start-of-frame position and car.speed * dt is their
+	# travel over the same interval the player just covered.
+	var hit_car = null
+	var best_dz := INF
+	for seg in _segment_span(from_z, to_z, pad):
+		for car in seg.cars:
+			if int(car.get("pidx", -1)) == i:
+				continue   # your own mirror
+			if p.speed <= car.speed:
+				continue
+			if not Contact.lateral(p.x, player_w, car.offset,
+					Contact.width_of(car.sprite), Contact.M_REAR):
+				continue
+			if not Contact.hit_span(from_z, to_z, player_l, float(car.z),
+					float(car.z) + float(car.speed) * dt,
+					Contact.length_of(car.sprite), track_len):
+				continue
+			# A span can hold several candidates; take the one actually hit
+			# first, which is the nearest ahead.
+			var dz: float = Contact.signed_dz(float(car.z), to_z, track_len)
+			if dz < best_dz:
+				best_dz = dz
+				hit_car = car
+	if hit_car != null:
+		p.speed = hit_car.speed * (hit_car.speed / maxf(p.speed, 1.0))
+		p.position_z = fposmod(hit_car.z - player_z(), track_len)
+		Audio.play("bump", 0.0, 1.0, 0.3)
 
 
+## Kept as a thin alias: the lateral test now lives in Contact alongside the
+## longitudinal one, so the two halves of "are these touching" stay together.
 static func _overlap(x1: float, w1: float, x2: float, w2: float, percent: float = 1.0) -> bool:
-	var half := percent * 0.5
-	var min1 := x1 - w1 * half
-	var max1 := x1 + w1 * half
-	var min2 := x2 - w2 * half
-	var max2 := x2 + w2 * half
-	return not (max1 < min2 or min1 > max2)
+	return Contact.lateral(x1, w1, x2, w2, percent)

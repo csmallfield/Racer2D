@@ -179,14 +179,21 @@ func add_tunnel(length: int, ceiling_height: float = 1600.0, mouth: int = 8,
 func add_boost_pickup(seg_index: int, offset: float) -> void:
 	if seg_index < 0 or seg_index >= segments.size():
 		return
-	segments[seg_index].pickups.append(
-			{"offset": offset, "taken": false, "respawn_t": 0.0})
+	# z is carried explicitly: collection is a swept test against this point,
+	# not "is the collector standing in this segment".
+	segments[seg_index].pickups.append({
+		"offset": offset, "taken": false, "respawn_t": 0.0,
+		"z": float(seg_index) * SEGMENT_LENGTH,
+	})
 
 
 func add_sprite(seg_index: int, sprite_name: String, offset: float) -> void:
 	if seg_index < 0 or seg_index >= segments.size():
 		return
-	segments[seg_index].sprites.append({"name": sprite_name, "offset": offset})
+	segments[seg_index].sprites.append({
+		"name": sprite_name, "offset": offset,
+		"z": float(seg_index) * SEGMENT_LENGTH,
+	})
 
 
 ## Scatter one sprite type along a range of segments.

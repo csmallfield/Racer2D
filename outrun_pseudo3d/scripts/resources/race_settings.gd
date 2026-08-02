@@ -24,6 +24,17 @@ extends Resource
 @export var lookahead := 35             # segments scanned ahead for avoidance
 @export var dodge_commit := 0.5         # seconds a dodge direction is latched
 @export var dodge_rate := 1.3           # committed dodge drift, road-halves/s at speed
+## Only dodge a car you would reach within this many seconds. Replaces the old
+## "any car ahead I happen to be faster than" trigger, which fired constantly
+## on the starting grid where closing speeds are noise.
+@export var dodge_ttc := 1.5
+## Quiet period after a commitment expires, so an expiring dodge cannot
+## immediately re-latch and set up a left-right limit cycle.
+@export var dodge_cooldown := 0.25
+## Traffic lateral rate, road-halves/s at full urgency. Traffic consumes the
+## steering signal directly (rivals latch it), so it needs its own rate now
+## that the signal is a normalised 0..1 urgency.
+@export var traffic_dodge_rate := 2.5
 
 @export_group("Speed")
 @export var accel := 3000.0             # world units / s^2
@@ -33,6 +44,10 @@ extends Resource
 
 @export_group("Collisions")
 @export var bonk_speed_cut := 0.75      # hitting traffic keeps this much speed
+## Absolute closing speed required for a rival to bonk. The ratio test alone
+## is scale-free, so at the start line 60 vs 100 units/s counted as slamming
+## into slow traffic and cost a quarter of the speed.
+@export var bonk_min_closing := 1200.0
 @export var bonk_cooldown := 1.5
 @export var ram_distance := 700.0       # tuck-behind range for matching player speed
 

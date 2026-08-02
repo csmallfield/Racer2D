@@ -11,6 +11,11 @@ extends RefCounted
 ##   texture    : Texture2D  - what to draw
 ##   world_w    : float      - width of the object in world units
 ##   world_h    : float      - height of the object in world units
+##   world_l    : float      - OPTIONAL longitudinal extent (depth along the
+##                            track) used for collision only. Sprites are flat
+##                            billboards with no drawn depth, but contact needs
+##                            a z size or it degenerates to "same segment".
+##                            Absent = Contact.SCENERY_LENGTH.
 ##   collidable : bool       - whether the player can crash into it
 ##
 ## For scale reference: the road is ROAD_WIDTH * 2 = 4000 world units wide
@@ -30,19 +35,19 @@ static func get_def(sprite_name: String) -> Dictionary:
 static func _build_all() -> void:
 	_cache["player"] = {
 		"texture": _make_car(Color(0.85, 0.12, 0.12)),
-		"world_w": 520.0, "world_h": 300.0, "collidable": false,
+		"world_w": 520.0, "world_h": 300.0, "world_l": 200.0, "collidable": false,
 	}
 	_cache["car_blue"] = {
 		"texture": _make_car(Color(0.15, 0.35, 0.85)),
-		"world_w": 500.0, "world_h": 290.0, "collidable": true,
+		"world_w": 500.0, "world_h": 290.0, "world_l": 200.0, "collidable": true,
 	}
 	_cache["car_yellow"] = {
 		"texture": _make_car(Color(0.9, 0.75, 0.1)),
-		"world_w": 500.0, "world_h": 290.0, "collidable": true,
+		"world_w": 500.0, "world_h": 290.0, "world_l": 200.0, "collidable": true,
 	}
 	_cache["car_green"] = {
 		"texture": _make_car(Color(0.15, 0.6, 0.3)),
-		"world_w": 500.0, "world_h": 290.0, "collidable": true,
+		"world_w": 500.0, "world_h": 290.0, "world_l": 200.0, "collidable": true,
 	}
 	_cache["boost_pickup"] = {
 		"texture": _make_boost_canister(),
@@ -158,7 +163,7 @@ static func register_rival(index: int, profile: RivalProfile) -> void:
 		tex = _make_rival(profile.color)
 	_cache["rival_%d" % index] = {
 		"texture": tex,
-		"world_w": 510.0, "world_h": 295.0, "collidable": true,
+		"world_w": 510.0, "world_h": 295.0, "world_l": 200.0, "collidable": true,
 		"map_color": profile.color,
 	}
 
@@ -177,7 +182,7 @@ static func register_player(index: int) -> void:
 	var color := PLAYER_COLORS[index % PLAYER_COLORS.size()]
 	_cache["player_%d" % index] = {
 		"texture": _make_car(color),
-		"world_w": 520.0, "world_h": 300.0, "collidable": true,
+		"world_w": 520.0, "world_h": 300.0, "world_l": 200.0, "collidable": true,
 		"map_color": color,
 	}
 
@@ -192,7 +197,7 @@ static func register_player_from_profile(index: int, profile: RivalProfile) -> v
 		tex = _make_car(profile.color)
 	_cache["player_%d" % index] = {
 		"texture": tex,
-		"world_w": 520.0, "world_h": 300.0, "collidable": true,
+		"world_w": 520.0, "world_h": 300.0, "world_l": 200.0, "collidable": true,
 		"map_color": profile.color,
 	}
 

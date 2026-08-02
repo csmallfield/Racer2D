@@ -24,6 +24,9 @@ extends RefCounted
 ## GameConfig autoload; per-rival personality from resources/rivals/*.tres.
 var cfg: RaceSettings = GameConfig.race
 
+## Starting grid columns, cycled across the field.
+const GRID_COLUMNS: Array[float] = [-0.6, 0.6, -0.2, 0.2]
+
 var rivals: Array = []
 var events: Array[String] = []    # overtake messages, consumed by main each frame
 var leader_cp_times: Array[float] = []   # best rival time at each checkpoint
@@ -55,7 +58,10 @@ func spawn(main: Node2D, count: int, excluded: Array = [],
 			"roster_idx": int(chosen[i]),
 			"sprite": "rival_%d" % i,
 			"z": cfg.grid_gap * float(i + 1),
-			"offset": -0.45 if i % 2 == 0 else 0.45,
+			# Four columns, not two. With two, every other car in the grid
+			# shared an offset exactly, which is the degenerate input the
+			# dodge tiebreak used to resolve the same way for both cars.
+			"offset": GRID_COLUMNS[i % GRID_COLUMNS.size()],
 			"lane": profile.preferred_lane,
 			"speed": 0.0,          # standing start behind the countdown
 			# Form: a per-race roll on cruise, so grid order doesn't
@@ -66,6 +72,9 @@ func spawn(main: Node2D, count: int, excluded: Array = [],
 			"bonk_t": 0.0,
 			"dodge_dir": 0.0,      # committed dodge direction (hysteresis)
 			"dodge_t": 0.0,        # time remaining on the commitment
+			"dodge_cd": 0.0,       # quiet period after a commitment ends
+			"dodge_urgency": 0.0,  # 0..1 strength of the latched threat
+			"tiebreak": i,         # stable parity for dead-level dodges
 			"next_cp": 0,          # index of the next checkpoint to cross
 			"finish_time": -1.0,   # race clock at the finish line, -1 = racing
 			"y": main.ground_y(cfg.grid_gap * float(i + 1)), "vy": 0.0, "air": 0.0,
@@ -117,8 +126,8 @@ func update(dt: float, main: Node2D) -> void:
 		var r: Dictionary = rivals[ri]
 		var old_seg: Dictionary = main.find_segment(float(r.z))
 		var seg_count: int = main.track.segments.size()
-		var rival_w: float = SpriteCatalog.get_def(r.sprite).world_w \
-				/ RoadRenderer.ROAD_WIDTH
+		var rival_w: float = Contact.width_of(r.sprite)
+		var rival_l: float = Contact.length_of(r.sprite)
 
 		# --- Target speed: personality, corners, rubber band. ---
 		var target: float = r.base_speed
@@ -200,15 +209,27 @@ func update(dt: float, main: Node2D) -> void:
 		# deaf to opposite ones. Without this, per-frame dodge impulses
 		# alternate with lane-keeping pulling back toward the obstacle and
 		# the rival vibrates instead of swerving. ---
+		# _car_steer returns a signed 0..1 urgency. This used to keep only the
+		# sign, so every dodge ran at full rate no matter how remote the threat —
+		# and the commitment then held that full-rate swerve for half a second,
+		# which is what made the pack slide about at the line.
 		var dodge: float = main._car_steer(r, old_seg, cfg.lookahead)
-		if absf(dodge) > 0.0001 \
-				and (float(r.dodge_t) <= 0.0 or signf(dodge) == float(r.dodge_dir)):
-			r.dodge_dir = signf(dodge)
-			r.dodge_t = cfg.dodge_commit
+		r.dodge_cd = maxf(0.0, float(r.dodge_cd) - dt)
+		if absf(dodge) > 0.0:
+			if float(r.dodge_t) > 0.0 and signf(dodge) == float(r.dodge_dir):
+				r.dodge_t = cfg.dodge_commit            # refresh
+				r.dodge_urgency = absf(dodge)
+			elif float(r.dodge_t) <= 0.0 and float(r.dodge_cd) <= 0.0:
+				r.dodge_dir = signf(dodge)
+				r.dodge_t = cfg.dodge_commit
+				r.dodge_urgency = absf(dodge)
 		if float(r.dodge_t) > 0.0:
 			r.dodge_t = float(r.dodge_t) - dt
-			r.offset = float(r.offset) + float(r.dodge_dir) * cfg.dodge_rate * dt \
+			r.offset = float(r.offset) + float(r.dodge_dir) * cfg.dodge_rate \
+					* float(r.dodge_urgency) * dt \
 					* (float(r.speed) / GameConfig.player.max_speed)
+			if float(r.dodge_t) <= 0.0:
+				r.dodge_cd = cfg.dodge_cooldown
 		else:
 			# Hungry rivals steer for canisters ahead; otherwise run the
 			# racing line. Dodges (above) always take priority.
@@ -240,14 +261,27 @@ func update(dt: float, main: Node2D) -> void:
 			old_seg.cars.erase(r)
 			new_seg.cars.append(r)
 
-		# --- Boost pickups: first racer through takes it. ---
-		for pu in new_seg.pickups:
-			if not bool(pu.taken) \
-					and absf(float(pu.offset) - float(r.offset)) < 0.45:
-				pu.taken = true
-				pu.respawn_t = cfg.pickup_respawn
-				r.boost = minf(float(r.boost) + cfg.pickup_boost_amount,
-						float(r.boost_cap))
+		# --- Boost pickups: first racer through takes it. Swept over the frame,
+		# on the same lateral window and air gate the player uses — rivals had a
+		# wider window (0.45 vs 0.4) and no air gate at all, so they quietly won
+		# contested canisters. ---
+		if float(r.air) < 120.0:
+			var moved: float = float(r.speed) * dt
+			for pseg in main._segment_span(float(r.z) - moved, float(r.z),
+					Contact.PICKUP_LENGTH):
+				for pu in pseg.pickups:
+					if bool(pu.taken):
+						continue
+					if absf(float(pu.offset) - float(r.offset)) >= Contact.PICKUP_LATERAL:
+						continue
+					if not Contact.hit_span(float(r.z) - moved, float(r.z), rival_l,
+							float(pu.z), float(pu.z),
+							Contact.PICKUP_LENGTH, track_len):
+						continue
+					pu.taken = true
+					pu.respawn_t = cfg.pickup_respawn
+					r.boost = minf(float(r.boost) + cfg.pickup_boost_amount,
+							float(r.boost_cap))
 
 		# --- Bonk: a dodge that failed. Hitting slow traffic hurts. ---
 		# Only near the player: beyond the dodge AI's active range rivals
@@ -260,13 +294,25 @@ func update(dt: float, main: Node2D) -> void:
 			for other in new_seg.cars:
 				if other == r:
 					continue
-				if float(other.speed) < float(r.speed) * 0.7 \
-						and _overlap(float(r.offset), rival_w, float(other.offset),
-								SpriteCatalog.get_def(other.sprite).world_w
-								/ RoadRenderer.ROAD_WIDTH, 0.9):
-					r.speed = float(r.speed) * cfg.bonk_speed_cut
-					r.bonk_t = cfg.bonk_cooldown
-					break
+				# The ratio test alone is scale-free: on the grid a 40 unit/s
+				# difference read as slamming into stopped traffic.
+				var closing: float = float(r.speed) - float(other.speed)
+				if float(other.speed) >= float(r.speed) * 0.7 \
+						or closing < cfg.bonk_min_closing:
+					continue
+				if not Contact.lateral(float(r.offset), rival_w, float(other.offset),
+						Contact.width_of(other.sprite), Contact.M_SIDE):
+					continue
+				# Instantaneous band, not a sweep: traffic has already advanced
+				# this frame while other rivals have not, so there is no single
+				# consistent interval to sweep against. A bonk is sustained
+				# contact with a 1.5s cooldown, so the band is enough.
+				if not Contact.near(float(r.z), rival_l, float(other.z),
+						Contact.length_of(other.sprite), track_len):
+					continue
+				r.speed = float(r.speed) * cfg.bonk_speed_cut
+				r.bonk_t = cfg.bonk_cooldown
+				break
 
 		# --- Checkpoint and finish times, lap-aware: checkpoint indices run
 		# through every lap (index -> lap * per-lap-count + local). ---
@@ -306,12 +352,6 @@ func player_rank(player_progress: float) -> int:
 
 func total_racers() -> int:
 	return rivals.size() + 1
-
-
-static func _overlap(x1: float, w1: float, x2: float, w2: float,
-		percent: float = 1.0) -> bool:
-	var half := percent * 0.5
-	return not (x1 + w1 * half < x2 - w2 * half or x1 - w1 * half > x2 + w2 * half)
 
 
 ## Live results: finished racers sorted by time, then still-racing rivals in
