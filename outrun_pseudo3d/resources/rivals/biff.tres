@@ -11,5 +11,5 @@ preferred_lane = -0.5
 boost_capacity = 3.0
 boost_aggression = 0.5
 stat_speed = 3
-stat_accel = 2
-stat_handling = 3
+stat_accel = 3
+stat_handling = 4

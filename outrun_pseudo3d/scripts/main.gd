@@ -339,6 +339,7 @@ func _load_level(idx: int) -> void:
 		else:
 			SpriteCatalog.register_player(i)
 		var p := PlayerCar.new()
+		p.apply_profile(profile)
 		p.input_prefix = "p%d_" % i
 		# Side-by-side grid for multiple players, staggered slightly.
 		p.x = 0.0 if player_count == 1 else lerpf(-0.5, 0.5,
@@ -805,6 +806,16 @@ func _racer_select_cancel() -> void:
 
 ## The roster profile a player slot chose, or null to fall back to the fixed
 ## slot livery. selected_racers holds roster indices set at race start.
+## Display name for a player slot: their chosen racer, falling back to the
+## seat label when nothing was picked (Time Trial straight from the menu, or
+## a level loaded before Racer Select ran).
+func _player_display_name(slot: int) -> String:
+	var prof := _player_profile(slot)
+	if prof != null and not String(prof.display_name).is_empty():
+		return String(prof.display_name)
+	return PLAYER_LABELS[slot] if slot < PLAYER_LABELS.size() else "PLAYER"
+
+
 func _player_profile(slot: int) -> RivalProfile:
 	if slot < selected_racers.size():
 		var idx: int = int(selected_racers[slot])
@@ -1261,6 +1272,18 @@ func _collect_records() -> Array:
 		out.append({"slot": i, "t": t, "level": fname, "bucket": bucket,
 				"metric": "BEST LAP" if is_circuit else "TOTAL",
 				"racer": _racer_stem(_player_profile(i)), "rank": 0})
+	# Rank each qualifying time against the stored board PLUS the better times
+	# in this same batch, so a split-screen race that qualifies two players
+	# shows #1 and #2 rather than two #1s.
+	for rec in out:
+		var ahead := 0
+		for other in out:
+			if other != rec and String(other.level) == String(rec.level) \
+					and String(other.bucket) == String(rec.bucket) \
+					and float(other.t) < float(rec.t):
+				ahead += 1
+		rec.rank = Records.projected_rank(String(rec.level), String(rec.bucket),
+				float(rec.t), ahead)
 	return out
 
 
@@ -1352,7 +1375,13 @@ func _merged_board() -> Array:
 	var done: Array = []
 	var racing: Array = []
 	for i in range(players.size()):
-		var label: String = "YOU" if solo() else PLAYER_LABELS[i]
+		# The racer you picked, not "YOU" — the whole point of Racer Select is
+		# that you are driving as someone. Split-screen keeps the seat prefix
+		# because the colour banding is keyed to it and two players may well
+		# have picked the same racer.
+		var label: String = _player_display_name(i)
+		if not solo():
+			label = "%s \u00b7 %s" % [PLAYER_LABELS[i], label]
 		if finished[i] and finish_time[i] != INF:
 			done.append({"name": label, "time": finish_time[i],
 					"is_player": true, "pidx": i})

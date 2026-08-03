@@ -10,6 +10,13 @@ var main                          # orchestrator, for backdrop + callback
 
 var _rows: Array = []
 var _final := false
+
+## Gold / silver / bronze for the podium congratulations lines.
+const PODIUM_TINT: Array[Color] = [
+	Color(1.0, 0.85, 0.30),
+	Color(0.82, 0.85, 0.92),
+	Color(0.85, 0.62, 0.38),
+]
 var _dynamic: Array[Node] = []
 
 const PLAYER_TINT: Array[Color] = [
@@ -74,9 +81,11 @@ func _build(cup_name: String, round_no: int, total: int) -> void:
 		champ.size = Vector2(1920, 70)
 		champ.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 		_add(champ)
+		_add_congratulations()
 
-	# Rows sized to fit whatever the field is (6-10 entrants).
-	var top := 300.0
+	# Rows sized to fit whatever the field is (6-10 entrants). The final
+	# screen carries a congratulations line per human, so it starts lower.
+	var top := 300.0 + (float(_human_rows().size()) * 46.0 if _final else 0.0)
 	var row_h := minf(56.0, 620.0 / maxf(float(_rows.size()), 1.0))
 	var font := int(clampf(row_h * 0.62, 22.0, 36.0))
 	for i in range(_rows.size()):
@@ -148,6 +157,51 @@ func _build_row(i: int, row: Dictionary, y: float, row_h: float, font: int) -> v
 
 
 # === HELPERS ===
+
+## Human entrants, in finishing order, with their 1-based cup position.
+func _human_rows() -> Array:
+	var out: Array = []
+	for i in range(_rows.size()):
+		if bool(_rows[i].get("is_player", false)):
+			out.append({"row": _rows[i], "place": i + 1})
+	return out
+
+
+## Addressed to the player, not about the winner. "<X> WINS THE CUP" above is
+## a statement of fact that reads as a rival gloating when you came fourth.
+## One line per human, tinted to their seat colour, so a split-screen cup
+## does not privilege P1.
+func _add_congratulations() -> void:
+	var humans := _human_rows()
+	var y := 288.0
+	for k in range(humans.size()):
+		var place := int(humans[k].place)
+		var row: Dictionary = humans[k].row
+		var who: String = String(row.get("name", "PLAYER"))
+		var line := _congrats_text(place, who, humans.size() > 1)
+		var lbl := _label(line, 40, HORIZONTAL_ALIGNMENT_CENTER)
+		lbl.position = Vector2(0, y)
+		lbl.size = Vector2(1920, 56)
+		lbl.add_theme_color_override("font_color",
+				PODIUM_TINT[mini(place, PODIUM_TINT.size()) - 1] if place <= 3
+				else Color(0.72, 0.74, 0.8))
+		_add(lbl)
+		y += 46.0
+
+
+func _congrats_text(place: int, who: String, multi: bool) -> String:
+	var prefix := "%s: " % who if multi else ""
+	match place:
+		1:
+			return "%sCONGRATULATIONS! YOU WON THE CUP!" % prefix
+		2:
+			return "%sCONGRATULATIONS! YOU TOOK 2ND PLACE!" % prefix
+		3:
+			return "%sCONGRATULATIONS! YOU TOOK 3RD PLACE!" % prefix
+		_:
+			return "%sNICE RACING \u2014 KEEP PRACTICING. YOU CAME %s." \
+					% [prefix, HudLayer.ordinal(place).to_upper()]
+
 
 func _label(text: String, size: int, align: int) -> Label:
 	var l := Label.new()

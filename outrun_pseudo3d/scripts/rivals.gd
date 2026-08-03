@@ -354,27 +354,6 @@ func total_racers() -> int:
 	return rivals.size() + 1
 
 
-## Live results: finished racers sorted by time, then still-racing rivals in
-## their current running order with no time (they fill in as they cross —
-## refresh each frame while the board is up). The player row's index is the
-## final rank.
-func board_entries(player_time: float) -> Array:
-	var finished: Array = [
-		{"name": "YOU", "time": player_time, "is_player": true},
-	]
-	var racing: Array = []
-	for r in rivals:
-		if float(r.finish_time) >= 0.0:
-			finished.append({"name": r.name, "time": float(r.finish_time),
-					"is_player": false})
-		else:
-			racing.append({"name": r.name, "time": -1.0, "is_player": false,
-					"z": float(r.z)})
-	finished.sort_custom(func(a, b): return float(a.time) < float(b.time))
-	racing.sort_custom(func(a, b): return float(a.z) > float(b.z))
-	return finished + racing
-
-
 ## Projected seconds until the best-placed rival still short of a checkpoint
 ## reaches it — the "how far ahead am I?" number when the player leads.
 func next_rival_eta(cp_z: float) -> float:

@@ -58,7 +58,17 @@ func setup(p_cup: CupDefinition, p_player_count: int, p_player_racers: Array,
 
 	for i in range(player_count):
 		var key := player_key(i)
-		_register(key, "PLAYER %d" % (i + 1) if player_count > 1 else "YOU")
+		# Standings name humans by the racer they picked, same as the results
+		# board. The seat prefix stays in split-screen so the bolded human
+		# rows are still traceable to a controller.
+		var who := "PLAYER %d" % (i + 1)
+		if i < player_racers.size():
+			var pi := int(player_racers[i])
+			if pi >= 0 and pi < roster.size():
+				var mine: RivalProfile = roster[pi]
+				who = String(mine.display_name) if player_count <= 1 \
+						else "P%d \u00b7 %s" % [i + 1, String(mine.display_name)]
+		_register(key, who)
 	for idx in rival_indices:
 		var prof: RivalProfile = roster[int(idx)]
 		_register(racer_key(prof), String(prof.display_name))

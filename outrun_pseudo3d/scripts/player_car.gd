@@ -11,6 +11,34 @@ var s: PlayerSettings = GameConfig.player
 var d: DifficultyProfile = GameConfig.difficulty
 var input_prefix := "p0_"   # per-player action prefix (split screen)
 
+## Per-racer multipliers from the chosen RivalProfile's display stats. They
+## live on the instance, not on GameConfig.player, because split-screen
+## players can pick different racers and GameConfig.player is one shared
+## difficulty-scaled copy.
+##
+## Difficulty still never touches these: difficulty scales the OPPOSITION and
+## (on Easy only) the assists, while racer choice varies the car. The two axes
+## stay independent, so muscle memory is still portable across difficulties
+## for a given racer.
+var top_mul := 1.0        # stat_speed    -> top speed
+var accel_mul := 1.0      # stat_accel    -> acceleration
+var grip_mul := 1.0       # stat_handling -> steering rate and corner grip
+
+
+## Wire a chosen racer's stats (1..5, 3 = neutral) into this car.
+##
+## Spreads are deliberately unequal. Top speed moves least because the rival
+## roster's cruise_fraction already spans 0.94..1.03 — a wider player spread
+## than that would decide races before the first corner. Acceleration moves
+## most because it is felt constantly (every corner exit, every recovery) yet
+## barely shifts a lap record.
+func apply_profile(prof: RivalProfile) -> void:
+	if prof == null:
+		return
+	top_mul = 1.0 + (float(prof.stat_speed) - 3.0) * 0.02       # 0.96 .. 1.04
+	accel_mul = 1.0 + (float(prof.stat_accel) - 3.0) * 0.07     # 0.86 .. 1.14
+	grip_mul = 1.0 + (float(prof.stat_handling) - 3.0) * 0.05   # 0.90 .. 1.10
+
 
 func _init() -> void:
 	boost = s.boost_capacity
@@ -31,12 +59,13 @@ var boosting := false     # true while the boost button is down with fuel
 ## Advances the player one frame. Returns true if the finish line was crossed.
 func update(dt: float, main: Node) -> bool:
 	var seg: Dictionary = main.find_segment(position_z)
-	var speed_percent := speed / s.max_speed
+	var top := s.max_speed * top_mul
+	var speed_percent := speed / top
 	# Steering authority is capped at normal top speed: boost overspeed
 	# gives NO extra turning, while centrifugal force below scales with the
 	# real speed — corners punish boosting twice. Straights and passing are
 	# where it pays.
-	var dx := dt * 2.0 * minf(speed_percent, 1.0)
+	var dx := dt * 2.0 * minf(speed_percent, 1.0) * grip_mul
 
 	# Wheels off the ground: barely any steering, no centrifugal grip.
 	var control := 1.0 if air <= s.air_threshold else s.air_control
@@ -47,7 +76,10 @@ func update(dt: float, main: Node) -> bool:
 	steer_dir = steer
 
 	# Centrifugal force: curves push the car toward the outside.
-	x -= dx * speed_percent * seg.curve * s.centrifugal * control
+	# Better handling resists the outward push as well as turning in harder,
+	# so grip is applied twice — which is what makes it feel like grip rather
+	# than just a faster steering rate.
+	x -= dx * speed_percent * seg.curve * s.centrifugal / grip_mul * control
 
 	# Easy-mode edge assist: a gentle pull back toward the road once the car
 	# strays near the edge. Suppressed while the player actively steers
@@ -79,7 +111,7 @@ func update(dt: float, main: Node) -> bool:
 				break
 	slip = move_toward(slip, 1.0 if in_stream else 0.0, dt / s.slip_build_time)
 	var boost_f := 1.0 if boosting else 0.0
-	var allowed_max := s.max_speed * (1.0 + s.slip_top_bonus * slip
+	var allowed_max := top * (1.0 + s.slip_top_bonus * slip
 			+ s.boost_top_bonus * boost_f)
 
 	# Analog triggers scale acceleration/braking; keys give full strength.
@@ -89,7 +121,7 @@ func update(dt: float, main: Node) -> bool:
 	if air > s.air_threshold:
 		speed += s.decel * 0.15 * dt
 	elif throttle > 0.0:
-		speed += s.accel * (1.0 + s.slip_accel_bonus * slip
+		speed += s.accel * accel_mul * (1.0 + s.slip_accel_bonus * slip
 				+ s.boost_accel_bonus * boost_f) * dt * throttle
 	elif brake_in > 0.0:
 		speed += s.braking * dt * brake_in
@@ -109,7 +141,7 @@ func update(dt: float, main: Node) -> bool:
 	speed = maxf(speed, 0.0)
 	if speed > allowed_max:
 		# Overspeed from fading slipstream/boost bleeds off instead of snapping.
-		speed = move_toward(speed, allowed_max, s.max_speed * 0.6 * dt)
+		speed = move_toward(speed, allowed_max, top * 0.6 * dt)
 
 	var track_len: float = main.track.track_length()
 	var g_prev := _sprite_ground(main)

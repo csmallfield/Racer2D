@@ -12,4 +12,4 @@ boost_capacity = 3.0
 boost_aggression = 0.9
 stat_speed = 4
 stat_accel = 4
-stat_handling = 4
+stat_handling = 2

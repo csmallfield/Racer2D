@@ -29,10 +29,52 @@ var hill_offset := 0.0           # background parallax scroll (driven by main)
 var last_cam_y := 0.0            # camera altitude this frame (projects the player)
 var _aim_offset := 0.0           # smoothed aim deviation from terrain-following
 var _shake_t := 0.0              # boost-ignition camera shake remaining
+## Camera pitch, in the same units as scale*camera.y — i.e. a uniform screen
+## offset, which in this projection IS a small-angle pitch. Positive = nose
+## down (looking into a descent). See _update_pitch().
+var _pitch := 0.0
 var _ref_w := 1920.0             # aspect-locked width (16:9 of height): ALL
 								 # world scaling uses this, so wide viewports
 								 # (2P split) keep the 1P composition and the
 								 # extra width becomes pure peripheral view.
+
+
+## Aim the camera along the road instead of dead level.
+##
+## The camera has altitude but no pitch, so it always looks at the horizontal.
+## On a constant gradient the projection term scale*camera.y converges to
+## gradient * camera_depth, which puts the road's vanishing point at
+##     h * 0.5 * (1 + gradient * camera_depth)
+## On level_01's closing descent (add_hill(SHORT, -HILL.HIGH) = a 12000-unit
+## drop over 75 segments, gradient about -0.8) at the shipped 100 degree FOV
+## that is 0.84h: the whole road squeezed into the bottom sixth of the frame,
+## and worse through the eased middle of the hill.
+##
+## Cancelling that convergence term restores the vanishing point to mid-frame.
+## Doing it FULLY would be wrong — a dive that never reframes stops reading as
+## a dive at all — so pitch_strength keeps a fraction of the drop, and
+## pitch_max stops a freak gradient from throwing the horizon off-screen.
+##
+## The gradient is averaged over several samples rather than taken end to end:
+## a crest immediately followed by a dip would otherwise cancel to zero and
+## leave the worst framing untouched.
+func _update_pitch() -> void:
+	var look: float = cs.pitch_lookahead * TrackBuilder.SEGMENT_LENGTH
+	if look <= 0.0 or cs.pitch_strength <= 0.0:
+		_pitch = 0.0
+		return
+	var z0: float = player.position_z
+	var y0: float = main.ground_y(z0)
+	var grad := 0.0
+	var samples := 4
+	for k in range(1, samples + 1):
+		var d: float = look * float(k) / float(samples)
+		grad += (main.ground_y(z0 + d) - y0) / d
+	grad /= float(samples)
+	var target: float = clampf(-grad * camera_depth * cs.pitch_strength,
+			-cs.pitch_max, cs.pitch_max)
+	_pitch = lerpf(_pitch, target,
+			1.0 - exp(-get_process_delta_time() / maxf(cs.pitch_delay, 0.001)))
 
 
 ## Distance from camera to the player car along z.
@@ -66,6 +108,7 @@ func _draw() -> void:
 	_ref_w = minf(vp.x, vp.y * 16.0 / 9.0)
 	# Resolve the palette once per frame so the background and the road agree.
 	var th := _resolve_theme()
+	_update_pitch()
 	_draw_background(vp.x, vp.y, th)
 	_draw_road_and_sprites(vp.x, vp.y, th)
 
@@ -86,7 +129,10 @@ func _resolve_theme() -> Dictionary:
 # === BACKGROUND ===
 
 func _draw_background(w: float, h: float, th: Dictionary) -> void:
-	var horizon := h * 0.5
+	# Clamped to the frame: the sky and ground fills are drawn as rects from
+	# it, so an off-screen horizon would produce inverted rectangles rather
+	# than simply scrolling out of view.
+	var horizon := clampf(h * 0.5 - _pitch * h * 0.5, 0.0, h)
 	# Sky gradient.
 	var pts := PackedVector2Array([
 		Vector2(0, 0), Vector2(w, 0), Vector2(w, horizon), Vector2(0, horizon)])
@@ -164,7 +210,7 @@ func _project(p: Dictionary, cam_x: float, cam_y: float, cam_z: float, w: float,
 	p.screen.scale = camera_depth / z
 	# Rounding avoids sub-pixel seam lines between adjacent road slices.
 	p.screen.x = roundf(w * 0.5 + p.screen.scale * p.camera.x * _ref_w * 0.5)
-	p.screen.y = roundf(h * 0.5 - p.screen.scale * p.camera.y * h * 0.5)
+	p.screen.y = roundf(h * 0.5 - (p.screen.scale * p.camera.y + _pitch) * h * 0.5)
 	p.screen.w = roundf(p.screen.scale * ROAD_WIDTH * _ref_w * 0.5)
 
 
@@ -501,10 +547,14 @@ func _draw_player(w: float, h: float) -> void:
 	# still behind on higher ground, the car correctly drops low in the
 	# frame — briefly toward the bottom edge — until the camera follows.
 	var ground_world: float = player.y_pos - player.air
+	# These two inline the same projection as _project(), so they take the
+	# same pitch — otherwise the car would stay pinned to the bottom of the
+	# frame while the road it is standing on lifted away from it.
+	var pitch_px := _pitch * h * 0.5
 	var car_bottom := h * 0.5 + (last_cam_y - player.y_pos) * sc * h * 0.5 \
-			- cs.aesthetic_lift * h
+			- cs.aesthetic_lift * h - pitch_px
 	var shadow_y := h * 0.5 + (last_cam_y - ground_world) * sc * h * 0.5 \
-			- cs.aesthetic_lift * h
+			- cs.aesthetic_lift * h - pitch_px
 	var air_px: float = player.air * sc * h * 0.5
 	if shadow_y < h + 20.0:
 		var shrink := clampf(1.0 - air_px / 120.0, 0.55, 1.0)

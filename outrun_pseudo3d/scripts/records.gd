@@ -48,6 +48,28 @@ static func qualifies(level_file: String, bucket: String, t: float) -> bool:
 ## Insert an entry; returns its 1-based rank, or -1 if it missed the board.
 ## The insertion index is computed directly rather than searched for after
 ## sorting — dictionary identity isn't a safe thing to match on.
+## Where a time WOULD land, 1-based, without writing it. The initials screen
+## needs this: the real rank comes from add_entry, but that only runs after
+## the player has typed their initials, so the screen had nothing to show and
+## printed a hardcoded 0.
+##
+## `ahead` is the number of times in the same batch that beat this one — a
+## split-screen race can qualify several players at once, and each of them
+## shifts the others down. Returns 0 when the time would not make the board.
+static func projected_rank(level_file: String, bucket: String, t: float,
+		ahead: int = 0) -> int:
+	var list := get_entries(level_file, bucket)
+	var idx := list.size()
+	for k in range(list.size()):
+		if t < float((list[k] as Dictionary).get("t", INF)):
+			idx = k
+			break
+	idx += ahead
+	if idx >= MAX_ENTRIES:
+		return 0
+	return idx + 1
+
+
 static func add_entry(level_file: String, bucket: String, entry: Dictionary) -> int:
 	var all := _load_all()
 	var boards: Dictionary = all.get("boards", {})
